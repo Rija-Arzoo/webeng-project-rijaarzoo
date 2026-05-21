@@ -7,9 +7,16 @@ import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
 import MentorshipRequest from '../models/MentorshipRequest.js';
 
-// `pdf-parse` is CommonJS; in ESM we need to `require` it.
-const require = createRequire(import.meta.url);
-const { PDFParse } = require('pdf-parse');
+// Lazy-load pdf-parse (can break serverless cold start if required at import time).
+let PDFParseClass = null;
+async function getPDFParse() {
+  if (!PDFParseClass) {
+    const require = createRequire(import.meta.url);
+    const mod = require('pdf-parse');
+    PDFParseClass = mod.PDFParse || mod.default?.PDFParse || mod;
+  }
+  return PDFParseClass;
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const CURRENT_YEAR = new Date().getFullYear();
@@ -421,7 +428,7 @@ export const uploadResume = async (req, res) => {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Parse PDF to text (pdf-parse exports a `PDFParse` class in this version)
+    const PDFParse = await getPDFParse();
     const parser = new PDFParse({ data: req.file.buffer });
     const parsed = await parser.getText();
     const text = (parsed?.text || '').toString();

@@ -15,14 +15,39 @@ app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json({ limit: '12mb' }));
 app.use(express.urlencoded({ extended: true, limit: '12mb' }));
 
-// Ensure DB is ready (critical for Vercel serverless cold starts).
+// Health + root — no database required (works even if MongoDB env is missing).
+app.get('/', (req, res) => {
+  res.json({
+    name: 'Alumni Mentorship API',
+    health: '/api/health',
+    docs: 'Set Vercel env: MONGODB_URI, JWT_SECRET, FRONTEND_URL',
+  });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    realtime: process.env.VERCEL ? 'rest-only' : 'socket.io',
+    config: {
+      hasMongoUri: Boolean(process.env.MONGODB_URI || process.env.MONGO_URI),
+      hasJwtSecret: Boolean(process.env.JWT_SECRET),
+      nodeEnv: process.env.NODE_ENV || 'development',
+    },
+  });
+});
+
+// All other routes need MongoDB.
 app.use(async (req, res, next) => {
   try {
     await connectDB();
     next();
   } catch (err) {
     console.error('DB middleware error:', err.message);
-    res.status(503).json({ message: 'Database unavailable' });
+    res.status(503).json({
+      message: 'Database unavailable',
+      hint: 'Check MONGODB_URI in Vercel → Settings → Environment Variables',
+    });
   }
 });
 
@@ -31,14 +56,6 @@ app.use('/api/mentors', mentorRoutes);
 app.use('/api/requests', requestRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/users', usersRoutes);
-
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'Server is running',
-    timestamp: new Date().toISOString(),
-    realtime: process.env.VERCEL ? 'rest-only' : 'socket.io',
-  });
-});
 
 app.use((err, req, res, next) => {
   console.error('Error:', err);

@@ -14,9 +14,9 @@ Both apps deploy on **Vercel** as two projects from the same repo.
 ## 1. Deploy Backend (Vercel)
 
 1. [vercel.com](https://vercel.com) → **Add New Project** → import `Rija-Arzoo/webeng-project-rijaarzoo`
-2. **Root Directory:** `Backend`
-3. **Framework:** Other (uses `vercel.json` + `api/index.js`)
-4. **Environment variables:**
+2. **Root Directory:** `Backend` ← required (not repo root)
+3. **Framework:** Other (uses `api/index.js`)
+4. **Environment variables** (Project → Settings → Environment Variables):
 
    | Key | Value |
    |-----|-------|
@@ -26,8 +26,12 @@ Both apps deploy on **Vercel** as two projects from the same repo.
    | `CLIENT_ORIGIN` | Same as `FRONTEND_URL` |
    | `GEMINI_API_KEY` | Optional |
 
-5. Deploy → copy URL, e.g. `https://webeng-api.vercel.app`
-6. Test: `https://YOUR-BACKEND.vercel.app/api/health`
+   **Important:** `.env.local` is only for your computer. It is **not** uploaded to GitHub or Vercel. You must copy each variable into the Vercel dashboard manually.
+
+5. **MongoDB Atlas:** Network Access → allow `0.0.0.0/0` (or Vercel will be blocked).
+6. Deploy → copy URL, e.g. `https://webeng-api.vercel.app`
+7. Test: `https://YOUR-BACKEND.vercel.app/api/health`  
+   - `hasMongoUri: true` and `hasJwtSecret: true` means env is set correctly.
 
 ---
 
