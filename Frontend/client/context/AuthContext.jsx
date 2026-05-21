@@ -35,7 +35,12 @@ export const AuthProvider = ({ children }) => {
         setUser(sessionData.user);
         // Refresh profile in background — do not block route rendering.
         if (sessionData.token) {
-          setTimeout(() => fetchUserProfile(), 0);
+          const run = () => fetchUserProfile();
+          if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(run, { timeout: 2000 });
+          } else {
+            setTimeout(run, 100);
+          }
         }
       } catch (e) {
         console.error('Failed to parse saved session:', e);

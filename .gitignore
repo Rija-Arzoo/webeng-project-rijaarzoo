@@ -44,6 +44,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Duplicate media at repo root (canonical copy: Frontend/public/videos/)
+How it Works.mp4
+
 # Misc caches
 .cache/
 .parcel-cache/

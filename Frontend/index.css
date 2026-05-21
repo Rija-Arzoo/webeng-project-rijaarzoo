@@ -66,6 +66,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 a { color: var(--c-accent); text-decoration: none; transition: color 0.15s; }
 a:hover { color: var(--c-accent-dk); }
 a.text-white, a.text-white:hover { color: #fff !important; }
+/* Links styled as buttons must keep light text on hover (global a:hover was hiding it). */
+a.btn-primary,
+a.btn-primary:hover,
+a.btn-primary:focus,
+a.btn-primary:focus-visible,
+a.btn-primary:active {
+  color: #fff !important;
+}
 
 @layer components {
   .container-max { @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8; }

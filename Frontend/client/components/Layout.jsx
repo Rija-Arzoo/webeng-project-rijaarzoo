@@ -34,7 +34,7 @@ export default function Layout() {
 
     loadUnread();
     // Refresh badge periodically; skip heavy conversation fetch every 3s.
-    const intervalMs = location.pathname.includes('/chat') ? 60000 : 30000;
+    const intervalMs = location.pathname.includes('/chat') ? 90000 : 45000;
     const id = setInterval(loadUnread, intervalMs);
     return () => clearInterval(id);
   }, [user, location.pathname]);

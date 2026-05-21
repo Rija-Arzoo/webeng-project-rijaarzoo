@@ -1,14 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+
+const HOW_IT_WORKS_VIDEO = '/videos/how-it-works.mp4';
 
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
+  const videoRef = useRef(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  useEffect(() => {
+    if (!videoOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setVideoOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    const t = setTimeout(() => videoRef.current?.play?.(), 100);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', onKey);
+      clearTimeout(t);
+    };
+  }, [videoOpen]);
+
+  const openVideo = () => setVideoOpen(true);
+  const closeVideo = () => {
+    videoRef.current?.pause?.();
+    setVideoOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50 overflow-hidden">
@@ -92,18 +117,67 @@ export default function LandingPage() {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-5 mb-14 sm:mb-20">
-            <Link to="/register"
-              className="btn-primary text-base sm:text-lg px-8 sm:px-12 py-4 sm:py-5 rounded-2xl
-                         hover:shadow-2xl hover:shadow-indigo-500/25 hover:scale-105 transition-all duration-200">
-              <i className="fas fa-rocket mr-2.5"></i>
+            <Link
+              to="/register"
+              className="btn-primary text-white text-base sm:text-lg px-8 sm:px-12 py-4 sm:py-5 rounded-2xl
+                         hover:!text-white focus:!text-white hover:shadow-2xl hover:shadow-indigo-500/25
+                         hover:scale-105 transition-all duration-200"
+            >
+              <i className="fas fa-rocket mr-2.5" aria-hidden="true"></i>
               Start Your Journey
             </Link>
-            <button className="btn-outline text-base sm:text-lg px-8 sm:px-12 py-4 sm:py-5 rounded-2xl
-                               hover:shadow-lg transition-all duration-200">
-              <i className="fas fa-play-circle mr-2.5"></i>
+            <button
+              type="button"
+              onClick={openVideo}
+              className="btn-outline text-base sm:text-lg px-8 sm:px-12 py-4 sm:py-5 rounded-2xl
+                         hover:shadow-lg transition-all duration-200"
+              aria-haspopup="dialog"
+              aria-expanded={videoOpen}
+            >
+              <i className="fas fa-play-circle mr-2.5" aria-hidden="true"></i>
               How it Works
             </button>
           </div>
+
+          {/* How it Works video modal */}
+          {videoOpen && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8 bg-slate-900/80 backdrop-blur-sm"
+              role="dialog"
+              aria-modal="true"
+              aria-label="How AlumniNet works"
+              onClick={closeVideo}
+            >
+              <div
+                className="relative w-full max-w-4xl bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-700"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={closeVideo}
+                  className="absolute top-3 right-3 z-10 w-10 h-10 rounded-full bg-black/50 text-white
+                             hover:bg-black/70 flex items-center justify-center transition-colors"
+                  aria-label="Close video"
+                >
+                  <i className="fas fa-times"></i>
+                </button>
+                <video
+                  ref={videoRef}
+                  className="w-full aspect-video bg-black"
+                  controls
+                  playsInline
+                  preload="metadata"
+                  src={HOW_IT_WORKS_VIDEO}
+                >
+                  <track kind="captions" />
+                  Your browser does not support video playback.
+                </video>
+                <p className="px-4 py-3 text-sm text-slate-400 text-center">
+                  See how students connect with alumni mentors in three simple steps.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Trusted by strip */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 mb-16 sm:mb-20">
