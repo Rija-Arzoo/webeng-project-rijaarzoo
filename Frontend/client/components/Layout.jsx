@@ -22,15 +22,20 @@ export default function Layout() {
 
   useEffect(() => {
     if (!user) return undefined;
+
     const loadUnread = async () => {
       try {
-        const res = await api.chats.getConversations();
-        const total = (res.conversations || []).reduce((sum, c) => sum + (c.unreadCount || 0), 0);
-        setUnreadMessages(total);
-      } catch { /* ignore */ }
+        const res = await api.chats.getUnreadTotal();
+        setUnreadMessages(res.total || 0);
+      } catch {
+        /* ignore */
+      }
     };
+
     loadUnread();
-    const id = setInterval(loadUnread, 3000);
+    // Refresh badge periodically; skip heavy conversation fetch every 3s.
+    const intervalMs = location.pathname.includes('/chat') ? 60000 : 30000;
+    const id = setInterval(loadUnread, intervalMs);
     return () => clearInterval(id);
   }, [user, location.pathname]);
 

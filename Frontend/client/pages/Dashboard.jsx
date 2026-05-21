@@ -16,16 +16,39 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
     const load = async () => {
       try {
         const data = await api.requests.getUserRequests(user.id, user.role);
-        setRequests(data);
-        const tip = await geminiService.getCareerInsight(user.role, user.name);
-        setAiTip(tip);
-      } catch (err) { console.error(err); }
-      finally { setLoading(false); }
+        if (!cancelled) {
+          setRequests(data);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) setLoading(false);
+      }
     };
+
+    const loadTip = async () => {
+      try {
+        const tip = await geminiService.getCareerInsight(user.role, user.name);
+        if (!cancelled) setAiTip(tip);
+      } catch {
+        if (!cancelled) {
+          setAiTip('Focus on connecting with alumni in your target industry and updating your technical portfolio.');
+        }
+      }
+    };
+
+    setLoading(true);
     load();
+    loadTip();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   const handleAction = async (id, status) => {

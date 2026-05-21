@@ -1,100 +1,94 @@
-# Deployment Guide (GitHub + Vercel + Render)
+# Deployment Guide (GitHub + Vercel)
 
-## What lives at the repo root (`ACM/`)
+Both apps deploy on **Vercel** as two projects from the same repo.
 
-| Item | Purpose |
-|------|---------|
-| `package.json` | Convenience scripts only (`install:all`, `dev:frontend`, `test:e2e`, …) — **no** `node_modules` here |
-| `.gitignore` | Repo-wide ignores (env files, Playwright output, `dist/`) |
-| `README.md`, `DEPLOYMENT.md`, `render.yaml` | Docs and Render blueprint |
-| `docs/` | Architecture and API documentation |
-| `Frontend/` | Full Vite app + Playwright e2e tests |
-| `Backend/` | Express API + Vitest unit tests |
+| Project | Root directory | URL example |
+|---------|----------------|-------------|
+| Frontend | `Frontend` | `https://webeng-project-rijaarzoo.vercel.app` |
+| Backend API | `Backend` | `https://your-api.vercel.app` |
 
-**Not at root:** `.env.local`, `playwright.config.js`, `playwright-report/`, `test-results/`, or app `package-lock.json` paths — those belong under `Frontend/` or `Backend/`.
+> **Socket.io does not run on Vercel.** Chat uses the REST API (`POST /api/chats/messages`). Set `VITE_ENABLE_SOCKET=false` on the frontend in production.
 
 ---
 
-This repo is split into two deployable apps:
+## 1. Deploy Backend (Vercel)
 
-| Folder | Platform | Purpose |
-|--------|----------|---------|
-| `Frontend/` | [Vercel](https://vercel.com) | React + Vite UI |
-| `Backend/` | [Render](https://render.com) | Express API + Socket.io |
-
-## 1. Push to GitHub
-
-```bash
-git init
-git add .
-git commit -m "Split Frontend and Backend for Vercel and Render"
-git branch -M main
-git remote add origin https://github.com/YOUR_USER/YOUR_REPO.git
-git push -u origin main
-```
-
-## 2. Deploy Backend on Render
-
-1. **New → Web Service** → connect your GitHub repo.
-2. **Root Directory**: `Backend`
-3. **Build Command**: `npm install`
-4. **Start Command**: `npm start`
-5. **Environment variables** (from `Backend/.env.example`):
-
-   | Key | Example |
-   |-----|---------|
-   | `NODE_ENV` | `production` |
-   | `MONGODB_URI` | Your MongoDB Atlas connection string |
-   | `JWT_SECRET` | Long random secret (32+ chars) |
-   | `FRONTEND_URL` | `https://your-app.vercel.app` |
-   | `CLIENT_ORIGIN` | `https://your-app.vercel.app` |
-   | `GEMINI_API_KEY` | Optional, for AI mentor ranking |
-
-6. Deploy and copy your service URL, e.g. `https://alumni-mentorship-api.onrender.com`.
-
-Health check: `GET /api/health`
-
-You can also use the included `render.yaml` blueprint at the repo root.
-
-## 3. Deploy Frontend on Vercel
-
-1. **New Project** → import the same GitHub repo.
-2. **Root Directory**: `Frontend`
-3. **Framework Preset**: Vite (auto-detected)
-4. **Environment variables**:
+1. [vercel.com](https://vercel.com) → **Add New Project** → import `Rija-Arzoo/webeng-project-rijaarzoo`
+2. **Root Directory:** `Backend`
+3. **Framework:** Other (uses `vercel.json` + `api/index.js`)
+4. **Environment variables:**
 
    | Key | Value |
    |-----|-------|
-   | `VITE_API_URL` | `https://YOUR-RENDER-URL.onrender.com/api` |
-   | `VITE_SOCKET_URL` | `https://YOUR-RENDER-URL.onrender.com` |
+   | `MONGODB_URI` | MongoDB Atlas connection string |
+   | `JWT_SECRET` | Long random secret (32+ chars) |
+   | `FRONTEND_URL` | Your frontend Vercel URL |
+   | `CLIENT_ORIGIN` | Same as `FRONTEND_URL` |
+   | `GEMINI_API_KEY` | Optional |
+
+5. Deploy → copy URL, e.g. `https://webeng-api.vercel.app`
+6. Test: `https://YOUR-BACKEND.vercel.app/api/health`
+
+---
+
+## 2. Deploy Frontend (Vercel)
+
+1. **Add another project** from the same repo
+2. **Root Directory:** `Frontend`
+3. **Framework:** Vite
+4. **Environment variables:**
+
+   | Key | Value |
+   |-----|-------|
+   | `VITE_API_URL` | `https://YOUR-BACKEND.vercel.app/api` |
+   | `VITE_ENABLE_SOCKET` | `false` |
    | `VITE_GEMINI_API_KEY` | Optional |
 
-5. Deploy.
+5. Deploy
 
-`Frontend/vercel.json` configures the Vite build and SPA fallback.
+Do **not** set `VITE_SOCKET_URL` in production (real-time uses REST).
 
-## 4. Local development
+---
+
+## 3. Local development
 
 ```bash
-# Install both apps
 npm run install:all
 
-# Terminal 1 — API (port 5000)
+# Terminal 1 — API + Socket.io (port 5000)
 cd Backend
-cp .env.example .env.local
-# Edit MONGODB_URI and JWT_SECRET
 npm run dev
 
 # Terminal 2 — UI (port 3000)
 cd Frontend
-cp .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000
+`Frontend/.env.local` for local:
 
-## 5. After first deploy
+```env
+VITE_API_URL=http://localhost:5000/api
+VITE_SOCKET_URL=http://localhost:5000
+VITE_ENABLE_SOCKET=true
+```
 
-1. Set Render `FRONTEND_URL` / `CLIENT_ORIGIN` to your **production** Vercel URL.
-2. Redeploy Render if you change CORS origins.
-3. Confirm WebSocket chat works (Render free tier may sleep; first request can be slow).
+---
+
+## 4. Performance notes
+
+Slowness was caused by:
+
+- Sidebar polling **full conversations every 3 seconds** → now uses lightweight `/api/chats/unread-total` every 30s
+- Dashboard **waiting for Gemini** before showing content → requests load first, AI tip loads in background
+- Mentor list **waiting up to several seconds for Gemini ranking** → 2.5s server timeout, then default order
+- Chat **double-saving** via REST + socket → socket when connected, REST on Vercel
+
+First request after idle on Vercel may be slow (serverless cold start + MongoDB connect).
+
+---
+
+## Alternative: Render / Railway for backend
+
+If you need **live Socket.io**, deploy `Backend/` on Render or Railway (`npm start`) and point `VITE_SOCKET_URL` + `VITE_ENABLE_SOCKET=true` at that URL.
+
+See `render.yaml` at repo root for Render blueprint.

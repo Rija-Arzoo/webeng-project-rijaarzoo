@@ -6,6 +6,7 @@
 import io from 'socket.io-client';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_ENABLED = import.meta.env.VITE_ENABLE_SOCKET !== 'false';
 
 class SocketService {
   constructor() {
@@ -18,7 +19,7 @@ class SocketService {
    * Connect to Socket.io server
    */
   connect(userId) {
-    if (this.isConnected) return;
+    if (!SOCKET_ENABLED || this.isConnected) return;
 
     this.socket = io(SOCKET_URL, {
       reconnection: true,
@@ -86,10 +87,13 @@ class SocketService {
   /**
    * Send a message through Socket.io
    */
+  get connected() {
+    return Boolean(this.isConnected && this.socket);
+  }
+
   sendMessage(conversationId, senderId, text, clientTempId = null) {
-    if (!this.socket) {
-      console.error('Socket not connected');
-      return;
+    if (!this.socket || !this.isConnected) {
+      return false;
     }
 
     this.socket.emit('send_message', {
@@ -99,6 +103,7 @@ class SocketService {
       clientTempId,
       timestamp: new Date().toISOString(),
     });
+    return true;
   }
 
   /**

@@ -3,6 +3,9 @@ import { auth } from '../middleware/authMiddleware.js';
 import User from '../models/User.js';
 import Profile from '../models/Profile.js';
 import { rankMentorIdsForStudent, applyMentorOrder } from '../services/geminiMentorRank.js';
+import { withTimeout } from '../lib/withTimeout.js';
+
+const GEMINI_RANK_TIMEOUT_MS = 2500;
 
 const router = express.Router();
 
@@ -89,7 +92,11 @@ router.get('/', auth, async (req, res) => {
         skills: pr?.skills?.length ? pr.skills : u.skills || [],
       }));
 
-      const orderedIds = await rankMentorIdsForStudent(student, mentorsCompact);
+      const orderedIds = await withTimeout(
+        rankMentorIdsForStudent(student, mentorsCompact),
+        GEMINI_RANK_TIMEOUT_MS,
+        null
+      );
       if (orderedIds?.length) {
         mentorRows = [...applyMentorOrder(head, orderedIds), ...mentorRows.slice(MAX_GEMINI_MENTORS)];
         aiRanked = true;

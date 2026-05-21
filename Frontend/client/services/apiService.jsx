@@ -216,6 +216,10 @@ export const api = {
 
   // ========== CHAT & MESSAGING ==========
   chats: {
+    getUnreadTotal: async () => {
+      return request('/chats/unread-total', { method: 'GET' });
+    },
+
     // Conversations
     getConversations: async () => {
       return request('/chats/conversations', { method: 'GET' });
@@ -242,10 +246,11 @@ export const api = {
 
     // Messages
     sendMessage: async (conversationId, text) => {
-      return request('/chats/messages', {
+      const res = await request('/chats/messages', {
         method: 'POST',
         body: JSON.stringify({ conversationId, text }),
       });
+      return res.message || res;
     },
 
     getMessages: async (conversationId, limit = 50, skip = 0) => {

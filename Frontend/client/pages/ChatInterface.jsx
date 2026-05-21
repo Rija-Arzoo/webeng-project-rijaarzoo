@@ -61,7 +61,7 @@ export default function ChatInterface() {
       const nextMessages = response.messages || [];
       setMessages(nextMessages);
       messagesCacheRef.current.set(convId, nextMessages);
-      await api.chats.markConversationAsRead(convId);
+      api.chats.markConversationAsRead(convId).catch(() => {});
       socketService.emitConversationRead(convId, user.id);
       setConversations((prev) =>
         prev.map((c) => (c._id === convId ? { ...c, unreadCount: 0 } : c))
@@ -261,8 +261,27 @@ export default function ChatInterface() {
           : c))].sort((a, b) => new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0))
       );
 
-      await api.chats.sendMessage(activeConversationId, textToSend);
-      socketService.sendMessage(activeConversationId, user.id, textToSend, tempId);
+      if (socketService.connected) {
+        socketService.sendMessage(activeConversationId, user.id, textToSend, tempId);
+      } else {
+        const saved = await api.chats.sendMessage(activeConversationId, textToSend);
+        if (saved?._id) {
+          setMessages((prev) => {
+            const next = prev.map((m) =>
+              m._id === tempId
+                ? {
+                    ...m,
+                    _id: saved._id,
+                    createdAt: saved.createdAt || m.createdAt,
+                    readBy: saved.readBy || m.readBy,
+                  }
+                : m
+            );
+            messagesCacheRef.current.set(activeConversationId, next);
+            return next;
+          });
+        }
+      }
       setMessageInput('');
       setIsTyping(false);
     } catch (err) {

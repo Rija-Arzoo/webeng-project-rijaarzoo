@@ -77,7 +77,7 @@ export default function MentorFinder() {
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchMentors();
-    }, 500);
+    }, 300);
     return () => clearTimeout(timer);
   }, [selectedIndustry, selectedSkills, searchTerm]);
 

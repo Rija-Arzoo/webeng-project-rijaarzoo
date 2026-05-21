@@ -3,9 +3,12 @@ import mongoose from 'mongoose';
 import { auth } from '../middleware/authMiddleware.js';
 import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
-import User from '../models/User.js';
+import { persistMessage } from '../services/persistMessage.js';
 
 const router = express.Router();
+
+const participantSelect =
+  'name profilePicture role headline company title';
 
 // Frontend expects these routes (mounted at `/api/chats`):
 // - GET  /api/chats/conversations
@@ -21,6 +24,34 @@ const ensureConversationParticipant = (conversation, userId) => {
   return ids.includes(toId(userId));
 };
 
+// Lightweight unread badge for sidebar (avoids heavy conversation fetch every few seconds)
+router.get('/unread-total', auth, async (req, res) => {
+  try {
+    const userObjectId = new mongoose.Types.ObjectId(req.userId);
+    const rows = await Conversation.find({ participants: req.userId }).select('_id').lean();
+    const conversationIds = rows.map((c) => c._id);
+    if (conversationIds.length === 0) {
+      return res.json({ total: 0 });
+    }
+
+    const result = await Message.aggregate([
+      {
+        $match: {
+          conversationId: { $in: conversationIds },
+          senderId: { $ne: userObjectId },
+          readBy: { $not: { $elemMatch: { userId: userObjectId } } },
+        },
+      },
+      { $count: 'total' },
+    ]);
+
+    res.json({ total: result[0]?.total || 0 });
+  } catch (err) {
+    console.error('Unread total error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Get all conversations for the current user
 router.get('/conversations', auth, async (req, res) => {
   try {
@@ -28,7 +59,7 @@ router.get('/conversations', auth, async (req, res) => {
       .sort({ updatedAt: -1 })
       .populate({
         path: 'participants',
-        select: 'name profilePicture role skills headline company title bio location resumeSkills resumeSuggestedIndustry resumeSuggestedTopics',
+        select: participantSelect,
       })
       .lean();
 
@@ -79,7 +110,7 @@ router.get('/conversations/:conversationId', auth, async (req, res) => {
     const conversation = await Conversation.findById(req.params.conversationId)
       .populate({
         path: 'participants',
-        select: 'name profilePicture role skills headline company title bio location resumeSkills resumeSuggestedIndustry resumeSuggestedTopics',
+        select: participantSelect,
       })
       .lean();
 
@@ -167,20 +198,27 @@ router.get('/conversations/:conversationId/messages', auth, async (req, res) => 
   }
 });
 
-// Send message (persistence handled in Socket.IO)
+// Send message — persists via REST (required on Vercel; also used locally)
 router.post('/messages', auth, async (req, res) => {
   try {
     const { conversationId, text } = req.body || {};
-    if (!conversationId || !text) return res.status(400).json({ message: 'conversationId and text are required' });
+    if (!conversationId || !text?.trim()) {
+      return res.status(400).json({ message: 'conversationId and text are required' });
+    }
 
-    // Basic permission check; actual message persistence happens in the socket event.
     const conversation = await Conversation.findById(conversationId).lean();
     if (!conversation) return res.status(404).json({ message: 'Conversation not found' });
     if (!conversation.participants.map(toId).includes(toId(req.userId))) {
       return res.status(403).json({ message: 'Not allowed' });
     }
 
-    res.json({ success: true, message: 'Send queued via socket' });
+    const { payload } = await persistMessage({
+      conversationId,
+      senderId: req.userId,
+      text: text.trim(),
+    });
+
+    res.json({ success: true, message: payload });
   } catch (err) {
     console.error('Send message error:', err);
     res.status(500).json({ message: 'Server error' });
