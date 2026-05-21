@@ -6,18 +6,23 @@ MERN app connecting students with alumni mentors: real-time chat, mentorship req
 
 ```
 ACM/
-├── Frontend/          # React + Vite → deploy on Vercel
-│   ├── client/        # Pages, components, services
-│   ├── index.html
+├── package.json       # Root scripts only (no node_modules here)
+├── .gitignore         # Env files, Playwright output, dist/
+├── Frontend/          # React + Vite → Vercel
+│   ├── client/
+│   ├── playwright.config.js
+│   ├── tests/e2e/     # Playwright browser tests
+│   ├── .env.example   # VITE_* variables
 │   └── package.json
-├── Backend/           # Express + Socket.io → deploy on Render
-│   ├── routes/
-│   ├── models/
-│   ├── controllers/
+├── Backend/           # Express + Socket.io → Render
+│   ├── tests/unit/    # Vitest
+│   ├── .env.example
 │   └── package.json
-├── docs/              # Architecture & API docs
-└── DEPLOYMENT.md      # GitHub, Vercel, Render steps
+├── docs/
+└── DEPLOYMENT.md
 ```
+
+Copy `Backend/.env.example` → `Backend/.env.local` and `Frontend/.env.example` → `Frontend/.env.local` before running locally (these files are gitignored).
 
 ## Quick start (local)
 
