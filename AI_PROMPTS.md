@@ -18,11 +18,9 @@ when i save profile it hsould appear message success .... but it is not giving a
 all good but still website is so slow use optimazation,optimize operation ,u can use third party free services like cloudinary or whatever u want. but i want fast  website.currenlty dashboard request finding mentor chat page all take so much time that its not suitable for real time app.
 
 
-
 **PROMPT NO 5**
 
 i deploy but this is shown and i use them in environmental variable.@.env.local (1-14).
-
 
 
 **PROMPT NO 6**
