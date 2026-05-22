@@ -1,0 +1,8 @@
+
+{
+  "name": "AlumniConnect - Professional Mentorship Network",
+  "description": "A high-performance alumni-student mentorship platform with AI career insights and real-time messaging.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
