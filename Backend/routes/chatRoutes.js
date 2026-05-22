@@ -4,11 +4,22 @@ import { auth } from '../middleware/authMiddleware.js';
 import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
 import { persistMessage } from '../services/persistMessage.js';
+import { avatarUrl } from '../lib/avatar.js';
 
 const router = express.Router();
+const MESSAGE_PAGE_SIZE = 80;
 
-const participantSelect =
-  'name profilePicture role headline company title';
+const participantSelect = 'name profilePicture role headline company title';
+
+const mapParticipant = (p) => ({
+  _id: toId(p._id),
+  name: p.name,
+  role: p.role,
+  headline: p.headline,
+  company: p.company,
+  title: p.title,
+  profilePicture: avatarUrl(p.profilePicture, toId(p._id)),
+});
 
 // Frontend expects these routes (mounted at `/api/chats`):
 // - GET  /api/chats/conversations
@@ -87,16 +98,14 @@ router.get('/conversations', auth, async (req, res) => {
 
     const formatted = conversations.map((c) => ({
       _id: toId(c._id),
-      participants: (c.participants || []).map((p) => ({
-        ...p,
-        _id: toId(p._id),
-      })),
-      lastMessage: c.lastMessage || '',
+      participants: (c.participants || []).map(mapParticipant),
+      lastMessage: (c.lastMessage || '').slice(0, 200),
       lastMessageSenderId: c.lastMessageSenderId ? toId(c.lastMessageSenderId) : null,
       lastMessageAt: c.lastMessageAt || null,
       unreadCount: unreadByConversation.get(toId(c._id)) || 0,
     }));
 
+    res.set('Cache-Control', 'private, max-age=10');
     res.json({ conversations: formatted });
   } catch (err) {
     console.error('Get conversations error:', err);
@@ -122,10 +131,7 @@ router.get('/conversations/:conversationId', auth, async (req, res) => {
     res.json({
       conversation: {
         _id: toId(conversation._id),
-        participants: (conversation.participants || []).map((p) => ({
-          ...p,
-          _id: toId(p._id),
-        })),
+        participants: (conversation.participants || []).map(mapParticipant),
         lastMessage: conversation.lastMessage || '',
         lastMessageSenderId: conversation.lastMessageSenderId
           ? toId(conversation.lastMessageSenderId)
@@ -175,9 +181,16 @@ router.get('/conversations/:conversationId/messages', auth, async (req, res) => 
       return res.status(403).json({ message: 'Not allowed' });
     }
 
+    const limit = Math.min(parseInt(req.query.limit, 10) || MESSAGE_PAGE_SIZE, 150);
+    const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
+
     const messages = await Message.find({ conversationId: req.params.conversationId })
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .lean();
+
+    messages.reverse();
 
     const formatted = messages.map((m) => ({
       _id: toId(m._id),

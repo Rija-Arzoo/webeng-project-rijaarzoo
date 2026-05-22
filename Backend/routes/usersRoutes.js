@@ -1,6 +1,7 @@
 import express from 'express';
 import User from '../models/User.js';
 import Profile from '../models/Profile.js';
+import { avatarUrl } from '../lib/avatar.js';
 
 const router = express.Router();
 
@@ -9,16 +10,20 @@ router.get('/:id/public', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const user = await User.findById(id).lean();
+    const user = await User.findById(id)
+      .select('name role profilePicture bio location skills company industry title headline isVerified resumeSkills resumeSuggestedIndustry resumeSuggestedTopics resumeUploadedAt')
+      .lean();
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const profile = await Profile.findOne({ user: id }).lean();
+    const profile = await Profile.findOne({ user: id })
+      .select('bio skills company industry title headline isVerified')
+      .lean();
 
     const resolved = {
       id: user._id.toString(),
       name: user.name,
       role: user.role,
-      profilePicture: user.profilePicture,
+      profilePicture: avatarUrl(user.profilePicture, user._id.toString()),
       bio: profile?.bio || user.bio || null,
       location: user.location || null,
       skills: profile?.skills || user.skills || [],

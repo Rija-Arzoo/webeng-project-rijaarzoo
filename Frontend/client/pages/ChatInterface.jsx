@@ -4,6 +4,9 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/apiService.jsx';
 import { socketService } from '../services/socketService.jsx';
 
+const SOCKET_ENABLED = import.meta.env.VITE_ENABLE_SOCKET !== 'false';
+const CHAT_POLL_MS = 8000;
+
 export default function ChatInterface() {
   const { conversationId } = useParams();
   const { user } = useAuth();
@@ -88,13 +91,28 @@ export default function ChatInterface() {
     }
 
     loadConversations();
-    if (user) {
+    if (user && SOCKET_ENABLED) {
       socketService.connect(user.id);
     }
     return () => {
       socketService.disconnect();
     };
   }, [user]);
+
+  // Vercel / REST-only: poll for new messages when socket is off
+  useEffect(() => {
+    if (SOCKET_ENABLED || !activeConversationId) return undefined;
+
+    const poll = () => {
+      if (document.visibilityState === 'hidden') return;
+      loadMessages(activeConversationId);
+      api.chats.invalidateChatCache();
+      loadConversations();
+    };
+
+    const id = setInterval(poll, CHAT_POLL_MS);
+    return () => clearInterval(id);
+  }, [activeConversationId]);
 
   useEffect(() => {
     if (conversations.length === 0) return;

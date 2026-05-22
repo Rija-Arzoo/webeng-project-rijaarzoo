@@ -3,7 +3,17 @@
  * Handles all HTTP requests to the backend
  */
 
+import { getCached, setCached, invalidateCache } from './apiCache.js';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+const cachedGet = async (cacheKey, endpoint, ttlMs = 45000) => {
+  const hit = getCached(cacheKey);
+  if (hit) return hit;
+  const data = await request(endpoint, { method: 'GET' });
+  setCached(cacheKey, data, ttlMs);
+  return data;
+};
 
 // Helper to get auth token
 const getAuthToken = () => {
@@ -137,8 +147,8 @@ export const api = {
 
       const queryString = params.toString();
       const endpoint = `/mentors${queryString ? '?' + queryString : ''}`;
-
-      return request(endpoint, { method: 'GET' });
+      const cacheKey = `mentors:${queryString}`;
+      return cachedGet(cacheKey, endpoint, 30000);
     },
 
     getById: async (mentorId) => {
@@ -175,16 +185,19 @@ export const api = {
         userId: userId.toString(),
         role: role,
       });
-      const res = await request(`/requests?${params.toString()}`, { method: 'GET' });
+      const qs = params.toString();
+      const res = await cachedGet(`requests:${qs}`, `/requests?${qs}`, 20000);
       return res.requests || [];
     },
 
     // Used by Dashboard.jsx buttons
     updateStatus: async (requestId, status) => {
-      return request(`/requests/${requestId}`, {
+      const res = await request(`/requests/${requestId}`, {
         method: 'PUT',
         body: JSON.stringify({ status }),
       });
+      invalidateCache('requests:');
+      return res;
     },
 
     getAll: async () => {
@@ -217,12 +230,12 @@ export const api = {
   // ========== CHAT & MESSAGING ==========
   chats: {
     getUnreadTotal: async () => {
-      return request('/chats/unread-total', { method: 'GET' });
+      return cachedGet('chats:unread', '/chats/unread-total', 15000);
     },
 
     // Conversations
     getConversations: async () => {
-      return request('/chats/conversations', { method: 'GET' });
+      return cachedGet('chats:conversations', '/chats/conversations', 12000);
     },
 
     getConversation: async (conversationId) => {
@@ -250,8 +263,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ conversationId, text }),
       });
+      invalidateCache('chats:');
       return res.message || res;
     },
+
+    invalidateChatCache: () => invalidateCache('chats:'),
 
     getMessages: async (conversationId, limit = 50, skip = 0) => {
       const params = new URLSearchParams({

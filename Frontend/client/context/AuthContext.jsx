@@ -33,13 +33,20 @@ export const AuthProvider = ({ children }) => {
       try {
         const sessionData = JSON.parse(savedSession);
         setUser(sessionData.user);
-        // Refresh profile in background — do not block route rendering.
+        if (sessionData.profile) {
+          setProfile(sessionData.profile);
+        }
+        // Refresh profile only if stale (>5 min) — avoids heavy /me on every page load.
         if (sessionData.token) {
-          const run = () => fetchUserProfile();
-          if (typeof requestIdleCallback === 'function') {
-            requestIdleCallback(run, { timeout: 2000 });
-          } else {
-            setTimeout(run, 100);
+          const fetchedAt = sessionData.profileFetchedAt || 0;
+          const stale = Date.now() - fetchedAt > 5 * 60 * 1000;
+          if (stale || !sessionData.profile) {
+            const run = () => fetchUserProfile();
+            if (typeof requestIdleCallback === 'function') {
+              requestIdleCallback(run, { timeout: 3000 });
+            } else {
+              setTimeout(run, 200);
+            }
           }
         }
       } catch (e) {
@@ -67,7 +74,23 @@ export const AuthProvider = ({ children }) => {
           role: response.profile.role || prev.role,
           profilePicture: response.profile.profilePicture || prev.profilePicture,
         };
-        persistSessionUser(merged);
+        const session = localStorage.getItem('alumni_session');
+        if (session) {
+          try {
+            const parsed = JSON.parse(session);
+            localStorage.setItem(
+              'alumni_session',
+              JSON.stringify({
+                ...parsed,
+                user: merged,
+                profile: response.profile,
+                profileFetchedAt: Date.now(),
+              })
+            );
+          } catch {
+            persistSessionUser(merged);
+          }
+        }
         return merged;
       });
     } catch (err) {

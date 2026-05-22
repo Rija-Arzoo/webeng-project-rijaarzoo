@@ -3,6 +3,8 @@ import { auth } from '../middleware/authMiddleware.js';
 import MentorshipRequest from '../models/MentorshipRequest.js';
 import User from '../models/User.js';
 import Conversation from '../models/Conversation.js';
+import { avatarUrl } from '../lib/avatar.js';
+import { USER_REQUEST_SENDER_FIELDS } from '../lib/userSelect.js';
 
 const router = express.Router();
 
@@ -25,12 +27,18 @@ router.get('/', auth, async (req, res) => {
     );
 
     const senders = await User.find({ _id: { $in: senderIds } })
-      .select(
-        'name profilePicture role skills bio location company title headline resumeSkills resumeSuggestedIndustry resumeSuggestedTopics'
-      )
+      .select(USER_REQUEST_SENDER_FIELDS)
       .lean();
 
-    const senderById = new Map(senders.map((u) => [u._id.toString(), u]));
+    const senderById = new Map(
+      senders.map((u) => [
+        u._id.toString(),
+        {
+          ...u,
+          profilePicture: avatarUrl(u.profilePicture, u._id.toString()),
+        },
+      ])
+    );
 
     const formatted = requests.map((r) => {
       const senderId = (userRole === 'alumni' ? r.studentId : r.mentorId).toString();
@@ -42,6 +50,7 @@ router.get('/', auth, async (req, res) => {
       };
     });
 
+    res.set('Cache-Control', 'private, max-age=15');
     res.json({ success: true, requests: formatted });
   } catch (err) {
     console.error('Get requests error:', err);

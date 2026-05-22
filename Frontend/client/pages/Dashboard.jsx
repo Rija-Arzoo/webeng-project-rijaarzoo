@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/apiService.jsx';
-import { geminiService } from '../services/geminiService.js';
+
+const CAREER_TIPS = [
+  'Connect with one alumni in your target industry this week.',
+  'Update your skills list to improve mentor matching.',
+  'Send a clear goal when requesting mentorship — specificity gets faster replies.',
+  'Review your profile headline — mentors scan it first.',
+];
 
 const statusConfig = {
   accepted: { label: 'Accepted', bg: '#dcfce7', color: '#16a34a' },
@@ -12,7 +18,9 @@ const statusConfig = {
 export default function Dashboard() {
   const { user } = useAuth();
   const [requests, setRequests] = useState([]);
-  const [aiTip, setAiTip] = useState('Consulting career strategist...');
+  const [aiTip] = useState(
+    () => CAREER_TIPS[Math.floor(Math.random() * CAREER_TIPS.length)]
+  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,20 +39,8 @@ export default function Dashboard() {
       }
     };
 
-    const loadTip = async () => {
-      try {
-        const tip = await geminiService.getCareerInsight(user.role, user.name);
-        if (!cancelled) setAiTip(tip);
-      } catch {
-        if (!cancelled) {
-          setAiTip('Focus on connecting with alumni in your target industry and updating your technical portfolio.');
-        }
-      }
-    };
-
     setLoading(true);
     load();
-    loadTip();
 
     return () => {
       cancelled = true;

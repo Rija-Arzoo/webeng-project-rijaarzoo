@@ -24,6 +24,7 @@ export default function Layout() {
     if (!user) return undefined;
 
     const loadUnread = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         const res = await api.chats.getUnreadTotal();
         setUnreadMessages(res.total || 0);
@@ -33,10 +34,18 @@ export default function Layout() {
     };
 
     loadUnread();
-    // Refresh badge periodically; skip heavy conversation fetch every 3s.
-    const intervalMs = location.pathname.includes('/chat') ? 90000 : 45000;
+    const intervalMs = location.pathname.includes('/chat') ? 120000 : 60000;
     const id = setInterval(loadUnread, intervalMs);
-    return () => clearInterval(id);
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadUnread();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [user, location.pathname]);
 
   const initials = user?.name?.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase() || '??';

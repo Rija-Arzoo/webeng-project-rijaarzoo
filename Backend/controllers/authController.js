@@ -6,6 +6,8 @@ import Profile from '../models/Profile.js';
 import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
 import MentorshipRequest from '../models/MentorshipRequest.js';
+import { avatarUrl } from '../lib/avatar.js';
+import { uploadAvatarDataUrl } from '../lib/cloudinary.js';
 
 // Lazy-load pdf-parse (can break serverless cold start if required at import time).
 let PDFParseClass = null;
@@ -189,7 +191,7 @@ export const register = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        profilePicture: user.profilePicture,
+        profilePicture: avatarUrl(user.profilePicture, user._id.toString()),
         verificationStatus: user.verificationStatus,
       }
     });
@@ -238,7 +240,7 @@ export const login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        profilePicture: user.profilePicture
+        profilePicture: avatarUrl(user.profilePicture, user._id.toString()),
       }
     });
   } catch (error) {
@@ -252,10 +254,14 @@ export const login = async (req, res) => {
  */
 export const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('-password');
+    const user = await User.findById(req.userId).select('-password -resumeText -securityQuestions');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+
+    const pic = user.profilePicture;
+    const displayPicture =
+      pic?.startsWith?.('http') ? pic : avatarUrl(pic, user._id.toString());
 
     res.json({
       profile: {
@@ -263,7 +269,8 @@ export const getMe = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        profilePicture: user.profilePicture,
+        profilePicture: displayPicture,
+        profilePictureIsUrl: Boolean(pic?.startsWith?.('http')),
         createdAt: user.createdAt,
         university: user.university || null,
         department: user.department || null,
@@ -509,7 +516,19 @@ export const updateProfile = async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     if (name !== undefined) user.name = name;
-    if (profilePicture !== undefined) user.profilePicture = profilePicture;
+    if (profilePicture !== undefined) {
+      if (typeof profilePicture === 'string' && profilePicture.startsWith('data:image')) {
+        const uploaded = await uploadAvatarDataUrl(profilePicture, req.userId);
+        user.profilePicture = uploaded || avatarUrl(null, req.userId);
+      } else if (
+        typeof profilePicture === 'string' &&
+        (profilePicture.startsWith('http://') || profilePicture.startsWith('https://'))
+      ) {
+        user.profilePicture = profilePicture;
+      } else if (!profilePicture) {
+        user.profilePicture = avatarUrl(null, req.userId);
+      }
+    }
     if (bio !== undefined) user.bio = bio;
     if (location !== undefined) user.location = location;
     if (normalizedSkills !== undefined) user.skills = normalizedSkills;
@@ -588,7 +607,9 @@ export const updateProfile = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        profilePicture: user.profilePicture,
+        profilePicture: user.profilePicture?.startsWith?.('http')
+          ? user.profilePicture
+          : avatarUrl(user.profilePicture, user._id.toString()),
         createdAt: user.createdAt,
         university: user.university || null,
         department: user.department || null,
@@ -607,6 +628,7 @@ export const updateProfile = async (req, res) => {
         title: user.title,
         headline: user.headline,
         isVerified: user.isVerified,
+        profilePictureIsUrl: Boolean(user.profilePicture?.startsWith?.('http')),
         resumeSkills: user.resumeSkills || [],
         resumeSuggestedIndustry: user.resumeSuggestedIndustry || null,
         resumeSuggestedTopics: user.resumeSuggestedTopics || [],

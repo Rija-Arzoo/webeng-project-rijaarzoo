@@ -4,10 +4,11 @@ import User from '../models/User.js';
 import Profile from '../models/Profile.js';
 import { rankMentorIdsForStudent, applyMentorOrder } from '../services/geminiMentorRank.js';
 import { withTimeout } from '../lib/withTimeout.js';
-
-const GEMINI_RANK_TIMEOUT_MS = 2500;
+import { avatarUrl } from '../lib/avatar.js';
+import { USER_MENTOR_FIELDS } from '../lib/userSelect.js';
 
 const router = express.Router();
+const GEMINI_RANK_TIMEOUT_MS = 1500;
 
 const normalizeSkill = (value) => {
   const key = (value || '').toString().trim().toLowerCase();
@@ -16,36 +17,70 @@ const normalizeSkill = (value) => {
   return key;
 };
 
-// Get all mentors
+const slimProfile = (p, u) => {
+  if (p) {
+    return {
+      headline: p.headline || u.headline || u.title || null,
+      bio: (p.bio || '').slice(0, 280) || null,
+      company: p.company || u.company || null,
+      industry: p.industry || u.industry || null,
+      skills: (p.skills?.length ? p.skills : u.skills || []).slice(0, 12),
+      isVerified: p.isVerified ?? u.isVerified ?? false,
+    };
+  }
+  return {
+    headline: u.headline || u.title || null,
+    bio: (u.bio || '').slice(0, 280) || null,
+    company: u.company || null,
+    industry: u.industry || null,
+    skills: (u.skills || []).slice(0, 12),
+    isVerified: u.isVerified || false,
+  };
+};
+
+const slimUser = (u) => ({
+  _id: u._id,
+  name: u.name,
+  email: u.email,
+  role: u.role,
+  profilePicture: avatarUrl(u.profilePicture, u._id.toString()),
+  company: u.company,
+  industry: u.industry,
+  title: u.title,
+  headline: u.headline,
+  isVerified: u.isVerified,
+});
+
+// Get all mentors — ?rank=ai enables Gemini (slow); default is fast DB order
 router.get('/', auth, async (req, res) => {
   try {
-    const { industry, skill, search } = req.query;
+    const { industry, skill, search, rank } = req.query;
+    const useAiRank = rank === 'ai' && req.userRole === 'student';
 
-    const alumni = await User.find({ role: 'alumni' }).lean();
+    const alumni = await User.find({ role: 'alumni' })
+      .select(USER_MENTOR_FIELDS)
+      .lean();
+
     const alumniIds = alumni.map((u) => u._id);
-
-    const profiles = await Profile.find({ user: { $in: alumniIds } }).lean();
+    const profiles = await Profile.find({ user: { $in: alumniIds } })
+      .select('user headline bio company industry skills isVerified')
+      .lean();
     const profileByUserId = new Map(profiles.map((p) => [p.user.toString(), p]));
 
     const regex = (val) => new RegExp(val?.toString().trim(), 'i');
 
     const filtered = alumni.filter((u) => {
       const p = profileByUserId.get(u._id.toString()) || null;
-      const skills = (p?.skills || u.skills || []);
+      const skills = p?.skills || u.skills || [];
       const company = (p?.company || u.company || '');
       const industryVal = (p?.industry || u.industry || u.company || '');
       const headline = (p?.headline || u.headline || u.title || '');
 
-      if (industry) {
-        if (!regex(industry).test(industryVal.toString())) return false;
-      }
-
+      if (industry && !regex(industry).test(industryVal.toString())) return false;
       if (skill) {
         const normalizedRequested = normalizeSkill(skill);
-        const normalizedSkills = skills.map((s) => normalizeSkill(s));
-        if (!normalizedSkills.includes(normalizedRequested)) return false;
+        if (!skills.map((s) => normalizeSkill(s)).includes(normalizedRequested)) return false;
       }
-
       if (search) {
         const nameOk = regex(search).test(u.name || '');
         const headlineOk = regex(search).test(headline || '');
@@ -53,43 +88,28 @@ router.get('/', auth, async (req, res) => {
         const industryOk = regex(search).test(industryVal || '');
         if (!nameOk && !headlineOk && !companyOk && !industryOk) return false;
       }
-
       return true;
     });
 
     let mentorRows = filtered.map((u) => ({
-      user: u,
-      profile: (() => {
-        const p = profileByUserId.get(u._id.toString());
-        if (p) return { ...p, industry: p.industry || u.industry || null };
-        return {
-          headline: u.headline || u.title || null,
-          bio: u.bio || null,
-          company: u.company || null,
-          industry: u.industry || null,
-          skills: u.skills || [],
-          isVerified: u.isVerified || false,
-        };
-      })(),
+      user: slimUser(u),
+      profile: slimProfile(profileByUserId.get(u._id.toString()), u),
     }));
 
     let aiRanked = false;
-    const MAX_GEMINI_MENTORS = 60;
-    if (req.userRole === 'student' && mentorRows.length > 0) {
+    if (useAiRank && mentorRows.length > 0) {
       const student = await User.findById(req.userId)
-        .select(
-          'skills headline industry bio resumeSkills resumeSuggestedIndustry resumeSuggestedTopics',
-        )
+        .select('skills headline industry bio resumeSkills resumeSuggestedIndustry resumeSuggestedTopics')
         .lean();
 
-      const head = mentorRows.slice(0, MAX_GEMINI_MENTORS);
+      const head = mentorRows.slice(0, 40);
       const mentorsCompact = head.map(({ user: u, profile: pr }) => ({
         id: u._id.toString(),
         name: u.name || '',
-        headline: pr?.headline || u.headline || u.title || '',
-        industry: pr?.industry || u.industry || '',
-        company: pr?.company || u.company || '',
-        skills: pr?.skills?.length ? pr.skills : u.skills || [],
+        headline: pr?.headline || '',
+        industry: pr?.industry || '',
+        company: pr?.company || '',
+        skills: pr?.skills || [],
       }));
 
       const orderedIds = await withTimeout(
@@ -98,11 +118,15 @@ router.get('/', auth, async (req, res) => {
         null
       );
       if (orderedIds?.length) {
-        mentorRows = [...applyMentorOrder(head, orderedIds), ...mentorRows.slice(MAX_GEMINI_MENTORS)];
+        const byId = new Map(head.map((m) => [m.user._id.toString(), m]));
+        const ordered = orderedIds.map((id) => byId.get(String(id))).filter(Boolean);
+        const rest = head.filter((m) => !orderedIds.includes(m.user._id.toString()));
+        mentorRows = [...ordered, ...rest, ...mentorRows.slice(40)];
         aiRanked = true;
       }
     }
 
+    res.set('Cache-Control', 'private, max-age=30');
     res.json({ success: true, mentors: mentorRows, aiRanked });
   } catch (err) {
     console.error('Get mentors error:', err);
@@ -110,30 +134,21 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// Get mentor by ID
 router.get('/:id', auth, async (req, res) => {
   try {
-    const { id } = req.params;
-    const user = await User.findById(id).lean();
+    const user = await User.findById(req.params.id).select(USER_MENTOR_FIELDS).lean();
     if (!user) return res.status(404).json({ message: 'Mentor not found' });
     if (user.role !== 'alumni') return res.status(400).json({ message: 'Invalid mentor role' });
 
-    const profile = await Profile.findOne({ user: id }).lean();
+    const profile = await Profile.findOne({ user: req.params.id })
+      .select('headline bio company industry skills isVerified')
+      .lean();
+
     res.json({
       success: true,
       mentor: {
-        user,
-        profile: (() => {
-          if (profile) return { ...profile, industry: profile.industry || user.industry || null };
-          return {
-            headline: user.headline || user.title || null,
-            bio: user.bio || null,
-            company: user.company || null,
-            industry: user.industry || null,
-            skills: user.skills || [],
-            isVerified: user.isVerified || false,
-          };
-        })(),
+        user: slimUser(user),
+        profile: slimProfile(profile, user),
       },
     });
   } catch (err) {
@@ -142,14 +157,8 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// Update mentor profile
 router.put('/:id', auth, async (req, res) => {
-  try {
-    res.json({ success: true, message: 'Profile update not implemented yet' });
-  } catch (err) {
-    console.error('Update mentor error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
+  res.json({ success: true, message: 'Profile update not implemented yet' });
 });
 
 export default router;

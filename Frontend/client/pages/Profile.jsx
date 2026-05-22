@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/apiService.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { compressImageFile } from '../utils/compressImage.js';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -177,13 +178,12 @@ export default function Profile() {
       setError('Profile image must be under 2MB');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      handleField('profilePicture', reader.result?.toString() || '');
-      setError('');
-    };
-    reader.onerror = () => setError('Could not read the selected image');
-    reader.readAsDataURL(file);
+    compressImageFile(file, 400, 0.82)
+      .then((dataUrl) => {
+        handleField('profilePicture', dataUrl);
+        setError('');
+      })
+      .catch(() => setError('Could not process the selected image'));
   };
 
   const handlePromoteToAlumni = async () => {

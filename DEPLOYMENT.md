@@ -78,16 +78,22 @@ VITE_ENABLE_SOCKET=true
 
 ---
 
-## 4. Performance notes
+## 4. Performance (latest)
 
-Slowness was caused by:
+**Main fixes:**
+- API responses no longer include multi-MB **base64 profile photos** (uses Dicebear URLs in lists)
+- **MongoDB indexes** on chats, requests, mentors
+- **Gemini ranking off by default** on Find Mentors (fast load); add `?rank=ai` only if needed
+- **45s client cache** for mentors, requests, conversations
+- **`/me` profile** fetched at most every 5 minutes
+- **Optional Cloudinary** for real avatar uploads (set env vars in Backend)
 
-- Sidebar polling **full conversations every 3 seconds** → now uses lightweight `/api/chats/unread-total` every 30s
-- Dashboard **waiting for Gemini** before showing content → requests load first, AI tip loads in background
-- Mentor list **waiting up to several seconds for Gemini ranking** → 2.5s server timeout, then default order
-- Chat **double-saving** via REST + socket → socket when connected, REST on Vercel
+**Optional Cloudinary (recommended for profile photos):**
+1. Create free account at [cloudinary.com](https://cloudinary.com)
+2. Add `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` to Backend Vercel env
+3. Re-upload profile photo once — stored as a fast HTTPS URL
 
-First request after idle on Vercel may be slow (serverless cold start + MongoDB connect).
+First API call after idle may still take 1–3s (Vercel cold start + MongoDB).
 
 ---
 

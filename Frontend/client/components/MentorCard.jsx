@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../services/apiService.jsx';
+import Avatar from './Avatar.jsx';
 
 export default function MentorCard({ mentor, profile }) {
   const [showModal, setShowModal] = useState(false);
@@ -28,8 +29,6 @@ export default function MentorCard({ mentor, profile }) {
     }
   };
 
-  const initials = mentor.name?.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase() || '??';
-
   return (
     <>
       <div className="card rounded-2xl p-5 flex flex-col h-full group transition-all duration-200 cursor-default">
@@ -37,16 +36,12 @@ export default function MentorCard({ mentor, profile }) {
         {/* Header */}
         <div className="flex items-start gap-3.5 mb-4">
           <div className="relative flex-shrink-0">
-            {mentor.profilePicture ? (
-              <img src={mentor.profilePicture} alt={mentor.name}
-                   className="w-14 h-14 rounded-xl object-cover"
-                   style={{ border: '2px solid var(--c-border)' }} />
-            ) : (
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center text-white font-bold text-sm"
-                   style={{ background: 'linear-gradient(135deg, var(--c-accent), #7b8ef5)' }}>
-                {initials}
-              </div>
-            )}
+            <Avatar
+              src={mentor.profilePicture}
+              name={mentor.name}
+              className="w-14 h-14 rounded-xl"
+              style={{ border: '2px solid var(--c-border)' }}
+            />
             {profile?.isVerified && (
               <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border-2 border-white"
                    style={{ background: 'var(--c-success)' }}>
