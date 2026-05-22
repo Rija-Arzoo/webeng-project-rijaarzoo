@@ -32,3 +32,17 @@ git commit -m "first commit"
 git branch -M main
 git remote add origin https://github.com/Rija-Arzoo/webeng-project-rijaarzoo.git
 git push -u origin main
+
+**PROMPT NO 7**
+My React frontend has messy duplicate service files in client/services/
+(api.js, api.jsx, apiService.jsx, aiService.js, aiService.jsx, geminiService.js).
+Pages import from different paths. Help me pick one API module and one AI module,
+list unused files to remove, and show the correct import path for all pages
+without changing functionality.
+
+**PROMPT NO 8**
+In client/pages/Dashboard.jsx, the header currently renders:
+<h1 className="section-title">Good to see you, {user.name?.split(' ')[0]} 👋</h1>
+Refactor the header so the main title shows only the user's first name,
+keep the date line and subtitle unchanged, and match existing CSS classes
+(section-title, section-subtitle). Provide the JSX only.
