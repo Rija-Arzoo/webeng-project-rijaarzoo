@@ -13,6 +13,7 @@
     "test:backend": "npm test --prefix Backend",
     "test:frontend": "npm run test:unit --prefix Frontend",
     "test:e2e": "npm run test:e2e --prefix Frontend",
+    "test:e2e:smoke": "npm run test:e2e:smoke --prefix Frontend",
     "test:e2e:ui": "npm run test:e2e:ui --prefix Frontend"
   }
 }

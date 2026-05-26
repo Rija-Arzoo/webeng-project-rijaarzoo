@@ -11,7 +11,8 @@ ACM/
 ├── Frontend/          # React + Vite → Vercel
 │   ├── client/
 │   ├── playwright.config.js
-│   ├── tests/e2e/     # Playwright browser tests
+│   ├── tests/unit/    # Vitest (initials, api cache)
+│   ├── tests/e2e/     # Playwright (UI + full-stack with in-memory MongoDB)
 │   ├── .env.example   # VITE_* variables
 │   └── package.json
 ├── Backend/           # Express + Socket.io → Render
@@ -69,3 +70,18 @@ See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for:
 - Real-time messaging (Socket.io)
 - Resume upload and skill extraction
 - Optional Gemini mentor ranking and dashboard insights
+
+## Tests
+
+```bash
+# Backend unit tests (4 cases)
+npm run test:backend
+
+# Frontend unit tests (4 cases)
+npm run test:frontend
+
+# E2E: MongoDB + API + Vite, then Playwright (full-stack login → dashboard)
+# Requires MongoDB running locally (or set MONGODB_URI in Backend/.env.local)
+cd Frontend && npm run test:e2e:install   # once
+npm run test:e2e
+```
