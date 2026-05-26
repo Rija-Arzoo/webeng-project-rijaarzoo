@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { getInitials } from '../utils/initials.js';
 
 export default function Avatar({ src, name, className = 'w-14 h-14 rounded-xl', style }) {
   const [failed, setFailed] = useState(false);
-  const initials = name?.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() || '??';
+  const initials = getInitials(name);
 
   if (!src || failed) {
     return (

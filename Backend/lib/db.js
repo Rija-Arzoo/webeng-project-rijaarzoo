@@ -44,6 +44,11 @@ async function ensureIndexes() {
       User.collection.createIndex({ role: 1 }),
       User.collection.createIndex({ email: 1 }),
       Conversation.collection.createIndex({ participants: 1, updatedAt: -1 }),
+      Message.collection.createIndex({
+        conversationId: 1,
+        senderId: 1,
+        'readBy.userId': 1,
+      }),
       Message.collection.createIndex({ conversationId: 1, createdAt: -1 }),
       Message.collection.createIndex({ conversationId: 1, senderId: 1 }),
       MentorshipRequest.collection.createIndex({ studentId: 1, createdAt: -1 }),
