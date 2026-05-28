@@ -20,7 +20,11 @@ export const requestService = {
     return {
       status: 200,
       body: { success: true, requests: formatted },
+<<<<<<< HEAD
       cacheControl: 'private, no-store',
+=======
+      cacheControl: 'private, max-age=15',
+>>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
     };
   },
 

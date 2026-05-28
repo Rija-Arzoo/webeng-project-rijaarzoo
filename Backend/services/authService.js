@@ -2,7 +2,11 @@ import bcryptjs from 'bcryptjs';
 import { currentYear } from '../config/index.js';
 import { avatarUrl } from '../lib/avatar.js';
 import { userRepository } from '../repositories/userRepository.js';
+<<<<<<< HEAD
 import { mapAuthUser, mapLoginUser } from '../mappers/userMapper.js';
+=======
+import { mapAuthUser } from '../mappers/userMapper.js';
+>>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
 import { createInitialProfile } from './profileSyncService.js';
 import { signAuthToken } from './tokenService.js';
 import {
@@ -142,7 +146,17 @@ export const authService = {
       body: {
         message: 'Login successful',
         token,
+<<<<<<< HEAD
         user: mapLoginUser(user),
+=======
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          profilePicture: avatarUrl(user.profilePicture, user._id.toString()),
+        },
+>>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
       },
     };
   },

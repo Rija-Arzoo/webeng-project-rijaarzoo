@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { installPdfNodePolyfills } from '../lib/pdfNodePolyfill.js';
+=======
+import { createRequire } from 'module';
+>>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
 import { config } from '../config/index.js';
 import { userRepository } from '../repositories/userRepository.js';
 import {
@@ -11,16 +15,23 @@ let PDFParseClass = null;
 
 async function getPDFParse() {
   if (!PDFParseClass) {
+<<<<<<< HEAD
     installPdfNodePolyfills();
     const mod = await import('pdf-parse');
     PDFParseClass = mod.PDFParse;
     if (!PDFParseClass) {
       throw new Error('PDF parser unavailable');
     }
+=======
+    const require = createRequire(import.meta.url);
+    const mod = require('pdf-parse');
+    PDFParseClass = mod.PDFParse || mod.default?.PDFParse || mod;
+>>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
   }
   return PDFParseClass;
 }
 
+<<<<<<< HEAD
 async function extractPdfText(fileBuffer) {
   const PDFParse = await getPDFParse();
   const parser = new PDFParse({ data: fileBuffer });
@@ -28,6 +39,8 @@ async function extractPdfText(fileBuffer) {
   return (parsed?.text || '').toString();
 }
 
+=======
+>>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
 export const resumeService = {
   async uploadResume(userId, fileBuffer) {
     if (!fileBuffer) {
@@ -38,6 +51,7 @@ export const resumeService = {
     if (!user) {
       return { status: 404, body: { message: 'User not found' } };
     }
+<<<<<<< HEAD
     let text = '';
     try {
       text = await extractPdfText(fileBuffer);
@@ -57,6 +71,13 @@ export const resumeService = {
         body: { message: msg || 'Could not read this PDF file' },
       };
     }
+=======
+
+    const PDFParse = await getPDFParse();
+    const parser = new PDFParse({ data: fileBuffer });
+    const parsed = await parser.getText();
+    const text = (parsed?.text || '').toString();
+>>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
 
     if (!text.trim()) {
       return { status: 400, body: { message: 'Could not extract text from this PDF' } };
