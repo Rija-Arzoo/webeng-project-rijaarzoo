@@ -5,7 +5,8 @@
 
 import { getCached, setCached, invalidateCache } from './apiCache.js';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const REQUEST_TIMEOUT_MS = 20_000;
 
 const cachedGet = async (cacheKey, endpoint, ttlMs = 45000) => {
   const hit = getCached(cacheKey);
@@ -45,13 +46,19 @@ const request = async (endpoint, options = {}) => {
     headers['x-auth-token'] = token;
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   const config = {
+    cache: 'no-store',
     ...options,
     headers,
+    signal: controller.signal,
   };
 
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    clearTimeout(timeoutId);
     const data = await response.json();
 
     if (!response.ok) {
@@ -60,6 +67,10 @@ const request = async (endpoint, options = {}) => {
 
     return data;
   } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Server is not responding. Is the backend running on port 5000?');
+    }
     console.error('API Error:', error);
     throw error;
   }
@@ -173,21 +184,19 @@ export const api = {
   // ========== MENTORSHIP REQUESTS ==========
   requests: {
     send: async (mentorId, goalStatement) => {
-      return request('/requests', {
+      const res = await request('/requests', {
         method: 'POST',
         body: JSON.stringify({ mentorId, goalStatement }),
       });
+      invalidateCache('requests:');
+      return res;
     },
 
-    // Used by Dashboard.jsx
-    getUserRequests: async (userId, role) => {
-      const params = new URLSearchParams({
-        userId: userId.toString(),
-        role: role,
-      });
-      const qs = params.toString();
-      const res = await cachedGet(`requests:${qs}`, `/requests?${qs}`, 20000);
-      return res.requests || [];
+    // Auth token determines user; always fetch live list (no in-memory cache).
+    getUserRequests: async () => {
+      invalidateCache('requests:');
+      const data = await request('/requests', { method: 'GET' });
+      return data.requests || [];
     },
 
     // Used by Dashboard.jsx buttons
@@ -221,9 +230,11 @@ export const api = {
     },
 
     cancel: async (requestId) => {
-      return request(`/requests/${requestId}`, {
+      const res = await request(`/requests/${requestId}`, {
         method: 'DELETE',
       });
+      invalidateCache('requests:');
+      return res;
     },
   },
 

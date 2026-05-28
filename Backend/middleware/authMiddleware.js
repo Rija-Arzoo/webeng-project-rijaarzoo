@@ -1,22 +1,18 @@
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+import { jwtSecret } from '../config/index.js';
 
 /**
- * Authentication middleware
- * Verifies JWT token and attaches user info to request
+ * Authentication middleware — verifies JWT and attaches user context to the request.
  */
 export const auth = (req, res, next) => {
   try {
-    // Get token from headers
     const token = req.headers['x-auth-token'] || req.headers.authorization?.split(' ')[1];
 
     if (!token) {
       return res.status(401).json({ message: 'No token, authorization denied' });
     }
 
-    // Verify token
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, jwtSecret);
     req.userId = decoded.userId;
     req.userEmail = decoded.email;
     req.userRole = decoded.role;
@@ -31,7 +27,7 @@ export const auth = (req, res, next) => {
 };
 
 /**
- * Check if user has specific role
+ * Restrict route access to specific roles.
  */
 export const requireRole = (roles) => (req, res, next) => {
   if (!roles.includes(req.userRole)) {

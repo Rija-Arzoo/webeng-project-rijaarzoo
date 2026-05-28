@@ -47,13 +47,13 @@ test.describe('Full stack (frontend + API + database)', () => {
   });
 
   test('user can sign in through the UI and load dashboard data from the API', async ({ page }) => {
-    await page.goto('/#/login');
+    await page.goto('/login');
 
     await page.getByPlaceholder('you@university.edu').fill(testUser.email);
     await page.getByPlaceholder('••••••••').fill(testUser.password);
     await page.getByRole('button', { name: /sign in/i }).click();
 
-    await expect(page).toHaveURL(/#\/dashboard/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
     await expect(page.getByRole('heading', { name: /good to see you, e2e/i })).toBeVisible({
       timeout: 15_000,
     });

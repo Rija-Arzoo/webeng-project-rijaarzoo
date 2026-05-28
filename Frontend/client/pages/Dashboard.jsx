@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { api } from '../services/apiService.jsx';
+import { useMentorshipRequests } from '../hooks/useMentorshipRequests.js';
+import { requestRowId } from '../utils/requestList.js';
 
 const CAREER_TIPS = [
   'Connect with one alumni in your target industry this week.',
@@ -17,63 +18,28 @@ const statusConfig = {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [requests, setRequests] = useState([]);
+  const {
+    requests,
+    loading,
+    refreshing,
+    cancellingIds,
+    handleUpdateStatus,
+    handleCancelOrDelete,
+  } = useMentorshipRequests(user);
+
   const [aiTip] = useState(
     () => CAREER_TIPS[Math.floor(Math.random() * CAREER_TIPS.length)]
   );
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const data = await api.requests.getUserRequests(user.id, user.role);
-        if (!cancelled) {
-          setRequests(data);
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    setLoading(true);
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
 
   const handleAction = async (id, status) => {
     try {
-      await api.requests.updateStatus(id, status);
-      const data = await api.requests.getUserRequests(user.id, user.role);
-      setRequests(data);
-    } catch (err) { console.error(err); }
+      await handleUpdateStatus(id, status);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleCancelOrDelete = async (id) => {
-    try {
-      await api.requests.cancel(id);
-      const data = await api.requests.getUserRequests(user.id, user.role);
-      setRequests(data);
-    } catch (err) { console.error(err); }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center" style={{ minHeight: '60vh' }}>
-        <div className="text-center">
-          <div className="loading-spinner mx-auto mb-4"></div>
-          <p className="text-sm" style={{ color: 'var(--c-text-3)' }}>Loading your dashboard…</p>
-        </div>
-      </div>
-    );
-  }
-
+  const requestsLoading = loading && requests.length === 0;
   const acceptedCount = requests.filter(r => r.status === 'accepted').length;
   const pendingCount  = requests.filter(r => r.status === 'pending').length;
 
@@ -120,10 +86,22 @@ export default function Dashboard() {
             <h2 className="font-display font-bold text-lg" style={{ color: 'var(--c-text)' }}>
               Mentorship Requests
             </h2>
-            <span className="badge">{requests.length} total</span>
+            <span className="badge flex items-center gap-2">
+              {requests.length} total
+              {refreshing && (
+                <i className="fas fa-spinner fa-spin text-xs opacity-60" aria-hidden="true" />
+              )}
+            </span>
           </div>
 
-          {requests.length === 0 ? (
+          {requestsLoading ? (
+            <div className="space-y-3" aria-busy="true" aria-label="Loading requests">
+              {[0, 1].map((i) => (
+                <div key={i} className="rounded-xl p-4 animate-pulse"
+                     style={{ background: 'var(--c-bg)', border: '1px solid var(--c-border)', height: '5.5rem' }} />
+              ))}
+            </div>
+          ) : requests.length === 0 ? (
             <div className="py-14 text-center">
               <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
                    style={{ background: 'var(--c-bg)' }}>
@@ -135,15 +113,15 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-3">
               {requests.map((req) => {
+                const rid = requestRowId(req);
                 const s = statusConfig[req.status] || statusConfig.pending;
                 return (
-                  <div key={req.id} className="rounded-xl p-4 transition-all"
+                  <div key={rid} className="rounded-xl p-4 transition-all"
                        style={{ background: 'var(--c-bg)', border: '1px solid var(--c-border)' }}
                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--c-border-md)'; e.currentTarget.style.background = 'var(--c-surface)'; }}
                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--c-border)'; e.currentTarget.style.background = 'var(--c-bg)'; }}>
 
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                      {/* Left – sender info */}
                       <div className="flex items-start gap-3 min-w-0">
                         {req.sender?.profilePicture ? (
                           <img src={req.sender.profilePicture} alt=""
@@ -163,52 +141,57 @@ export default function Dashboard() {
                             {req.topic}
                           </p>
 
-                          {/* Resume tags for alumni view */}
                           {user.role === 'alumni' && (
                             <div className="flex flex-wrap gap-1.5 mt-2">
                               {req.sender?.resumeSuggestedIndustry && (
                                 <span className="badge">{req.sender.resumeSuggestedIndustry}</span>
                               )}
-                              {req.sender?.resumeSkills?.slice(0,3).map(s => (
-                                <span key={s} className="badge" style={{ background: 'var(--c-bg)', color: 'var(--c-text-2)', border: '1px solid var(--c-border)' }}>{s}</span>
+                              {req.sender?.resumeSkills?.slice(0,3).map(skill => (
+                                <span key={skill} className="badge" style={{ background: 'var(--c-bg)', color: 'var(--c-text-2)', border: '1px solid var(--c-border)' }}>{skill}</span>
                               ))}
                             </div>
                           )}
 
-                          {/* Skills for student view */}
                           {user.role === 'student' && req.sender?.skills?.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mt-2">
-                              {req.sender.skills.slice(0,3).map(s => (
-                                <span key={s} className="badge" style={{ background: 'var(--c-bg)', color: 'var(--c-text-2)', border: '1px solid var(--c-border)' }}>{s}</span>
+                              {req.sender.skills.slice(0,3).map(skill => (
+                                <span key={skill} className="badge" style={{ background: 'var(--c-bg)', color: 'var(--c-text-2)', border: '1px solid var(--c-border)' }}>{skill}</span>
                               ))}
                             </div>
                           )}
                         </div>
                       </div>
 
-                      {/* Right – status / actions */}
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {req.status === 'pending' && user.role === 'student' && (
-                          <button onClick={() => handleCancelOrDelete(req.id)}
-                                  className="btn-secondary text-xs px-3 py-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleCancelOrDelete(rid)}
+                            disabled={cancellingIds.has(rid)}
+                            className="btn-secondary text-xs px-3 py-1.5 disabled:opacity-50 disabled:pointer-events-none"
+                          >
                             <i className="fas fa-ban text-xs"></i> Cancel
                           </button>
                         )}
                         {req.status === 'pending' && user.role === 'alumni' && (
                           <>
-                            <button onClick={() => handleAction(req.id, 'accepted')}
+                            <button onClick={() => handleAction(rid, 'accepted')}
                                     className="btn-primary text-xs px-3 py-1.5">
                               <i className="fas fa-check text-xs"></i> Accept
                             </button>
-                            <button onClick={() => handleAction(req.id, 'rejected')}
+                            <button onClick={() => handleAction(rid, 'rejected')}
                                     className="btn-secondary text-xs px-3 py-1.5">
                               Decline
                             </button>
-                            <button onClick={() => handleCancelOrDelete(req.id)}
-                                    className="text-xs px-2 py-1.5 rounded-lg transition-colors"
+                            <button
+                              type="button"
+                              onClick={() => handleCancelOrDelete(rid)}
+                              disabled={cancellingIds.has(rid)}
+                              className="text-xs px-2 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none"
                                     style={{ color: 'var(--c-danger)', background: '#fee2e210' }}
-                                    onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
-                                    onMouseLeave={e => e.currentTarget.style.background = '#fee2e210'}>
+                                    onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = '#fee2e210'; }}
+                            >
                               <i className="fas fa-trash text-xs"></i>
                             </button>
                           </>
@@ -228,7 +211,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* AI Insights */}
         <aside>
           <div className="card p-6 rounded-2xl relative overflow-hidden h-full"
                style={{ background: 'var(--c-sidebar)', border: '1px solid #27272a' }}>
@@ -246,7 +228,7 @@ export default function Dashboard() {
               <p className="text-sm leading-relaxed flex-1" style={{ color: '#a1a1aa' }}>
                 {aiTip}
               </p>
-              <button className="btn-primary w-full mt-5 py-2.5 text-sm">
+              <button type="button" className="btn-primary w-full mt-5 py-2.5 text-sm">
                 <i className="fas fa-rotate text-xs"></i> Refresh Insights
               </button>
             </div>

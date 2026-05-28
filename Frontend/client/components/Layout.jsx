@@ -13,7 +13,7 @@ export default function Layout() {
   const menu = [
     { label: 'Dashboard',     path: '/dashboard', icon: 'fa-gauge-high' },
     { label: 'Requests',      path: '/requests',  icon: 'fa-inbox' },
-    { label: 'Find Mentors',  path: '/mentors',   icon: 'fa-compass', studentOnly: true },
+    { label: 'Find Mentors',  path: '/mentors',   icon: 'fa-compass' },
     { label: 'Messages',      path: '/chat',      icon: 'fa-message' },
     { label: 'Profile',       path: '/profile',   icon: 'fa-circle-user' },
   ];

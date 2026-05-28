@@ -69,15 +69,9 @@ export default function MentorFinder() {
   };
 
   useEffect(() => {
-    if (user && user.role !== 'student') {
-      navigate('/dashboard');
-    }
-  }, [user, navigate]);
-
-  useEffect(() => {
     const timer = setTimeout(() => {
       fetchMentors();
-    }, 300);
+    }, 120);
     return () => clearTimeout(timer);
   }, [selectedIndustry, selectedSkills, searchTerm]);
 

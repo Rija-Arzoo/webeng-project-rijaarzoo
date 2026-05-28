@@ -1,15 +1,15 @@
 import React, { Suspense, lazy } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import Layout from './components/Layout.jsx';
+import LandingPage from './pages/LandingPage.jsx';
+import Dashboard from './pages/Dashboard.jsx';
+import Login from './pages/Login.jsx';
 
-const Layout = lazy(() => import('./components/Layout.jsx'));
-const LandingPage = lazy(() => import('./pages/LandingPage.jsx'));
-const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
 const MentorFinder = lazy(() => import('./pages/MentorFinder.jsx'));
 const ChatInterface = lazy(() => import('./pages/ChatInterface.jsx'));
 const Profile = lazy(() => import('./pages/Profile.jsx'));
 const Requests = lazy(() => import('./pages/Requests.jsx'));
-const Login = lazy(() => import('./pages/Login.jsx'));
 const Register = lazy(() => import('./pages/Register.jsx'));
 const PublicProfile = lazy(() => import('./pages/PublicProfile.jsx'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword.jsx'));

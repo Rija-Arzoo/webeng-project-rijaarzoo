@@ -43,9 +43,9 @@ export const AuthProvider = ({ children }) => {
           if (stale || !sessionData.profile) {
             const run = () => fetchUserProfile();
             if (typeof requestIdleCallback === 'function') {
-              requestIdleCallback(run, { timeout: 3000 });
+              requestIdleCallback(run, { timeout: 1000 });
             } else {
-              setTimeout(run, 200);
+              setTimeout(run, 0);
             }
           }
         }
@@ -113,9 +113,8 @@ export const AuthProvider = ({ children }) => {
         user: response.user,
       }));
 
-      // Fetch profile
-      await fetchUserProfile();
-      
+      fetchUserProfile().catch((err) => console.error('Profile refresh:', err));
+
       return response;
     } catch (err) {
       setError(err.message);
@@ -138,9 +137,8 @@ export const AuthProvider = ({ children }) => {
         user: response.user,
       }));
 
-      // Fetch profile
-      await fetchUserProfile();
-      
+      fetchUserProfile().catch((err) => console.error('Profile refresh:', err));
+
       return response;
     } catch (err) {
       setError(err.message);
@@ -185,6 +183,31 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('alumni_session');
   };
 
+  /** Merge fields into profile immediately (e.g. after resume upload). */
+  const patchProfile = (partial) => {
+    if (!partial || typeof partial !== 'object') return;
+    setProfile((prev) => {
+      const next = prev ? { ...prev, ...partial } : { ...partial };
+      const session = localStorage.getItem('alumni_session');
+      if (session) {
+        try {
+          const parsed = JSON.parse(session);
+          localStorage.setItem(
+            'alumni_session',
+            JSON.stringify({
+              ...parsed,
+              profile: next,
+              profileFetchedAt: Date.now(),
+            })
+          );
+        } catch {
+          // ignore malformed session
+        }
+      }
+      return next;
+    });
+  };
+
   const value = {
     user,
     profile,
@@ -195,6 +218,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateProfile,
     fetchUserProfile,
+    patchProfile,
     isAuthenticated: !!user,
   };
 

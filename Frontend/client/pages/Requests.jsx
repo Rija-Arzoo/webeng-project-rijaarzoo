@@ -1,49 +1,45 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../services/apiService.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useMentorshipRequests } from '../hooks/useMentorshipRequests.js';
+import { requestRowId } from '../utils/requestList.js';
 
 const STATUSES = ['pending', 'accepted', 'rejected'];
 
 export default function Requests() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [activeStatus, setActiveStatus] = useState('pending');
   const [error, setError] = useState('');
 
-  const loadRequests = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await api.requests.getUserRequests(user.id, user.role);
-      setRequests(data);
-    } catch (e) {
-      setError(e.message || 'Failed to load requests');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!user) return;
-    loadRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  const {
+    requests,
+    loading,
+    cancellingIds,
+    handleUpdateStatus,
+    handleCancelOrDelete,
+  } = useMentorshipRequests(user);
 
   const filtered = useMemo(() => {
     return requests.filter((r) => r.status === activeStatus);
   }, [requests, activeStatus]);
 
-  const handleUpdateStatus = async (id, status) => {
-    await api.requests.updateStatus(id, status);
-    await loadRequests();
+  const onUpdateStatus = async (id, status) => {
+    setError('');
+    try {
+      await handleUpdateStatus(id, status);
+    } catch (e) {
+      setError(e.message || 'Failed to update request');
+    }
   };
 
-  const handleCancelOrDelete = async (id) => {
-    await api.requests.cancel(id);
-    await loadRequests();
+  const onCancelOrDelete = async (id) => {
+    setError('');
+    try {
+      await handleCancelOrDelete(id);
+    } catch (e) {
+      setError(e.message || 'Failed to cancel request');
+    }
   };
 
   return (
@@ -60,6 +56,7 @@ export default function Requests() {
           {STATUSES.map((s) => (
             <button
               key={s}
+              type="button"
               onClick={() => setActiveStatus(s)}
               className={`px-3 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all ${
                 activeStatus === s
@@ -97,6 +94,7 @@ export default function Requests() {
             {activeStatus === 'pending' && user.role === 'student' && (
               <div className="mt-4">
                 <button
+                  type="button"
                   className="btn-primary text-xs sm:text-sm"
                   onClick={() => navigate('/mentors')}
                 >
@@ -108,9 +106,11 @@ export default function Requests() {
           </div>
         ) : (
           <div className="space-y-3 sm:space-y-4">
-            {filtered.map((req) => (
+            {filtered.map((req) => {
+              const rid = requestRowId(req);
+              return (
               <div
-                key={req.id}
+                key={rid}
                 className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-md transition-all"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -134,8 +134,10 @@ export default function Requests() {
                   <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     {req.status === 'pending' && user.role === 'student' && (
                       <button
-                        onClick={() => handleCancelOrDelete(req.id)}
-                        className="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all"
+                        type="button"
+                        onClick={() => onCancelOrDelete(rid)}
+                        disabled={cancellingIds.has(rid)}
+                        className="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all disabled:opacity-50 disabled:pointer-events-none"
                       >
                         <i className="fas fa-ban mr-2" />
                         Cancel
@@ -145,22 +147,26 @@ export default function Requests() {
                     {req.status === 'pending' && user.role === 'alumni' && (
                       <>
                         <button
-                          onClick={() => handleUpdateStatus(req.id, 'accepted')}
+                          type="button"
+                          onClick={() => onUpdateStatus(rid, 'accepted')}
                           className="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm bg-indigo-600 text-white text-shadow-indigo hover:bg-indigo-800 hover:shadow-indigo-500/30 transition-all"
                         >
                           <i className="fas fa-check mr-2" />
                           Accept
                         </button>
                         <button
-                          onClick={() => handleUpdateStatus(req.id, 'rejected')}
+                          type="button"
+                          onClick={() => onUpdateStatus(rid, 'rejected')}
                           className="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all"
                         >
                           <i className="fas fa-times mr-2" />
                           Decline
                         </button>
                         <button
-                          onClick={() => handleCancelOrDelete(req.id)}
-                          className="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm bg-red-50 text-red-700 hover:bg-red-100 transition-all"
+                          type="button"
+                          onClick={() => onCancelOrDelete(rid)}
+                          disabled={cancellingIds.has(rid)}
+                          className="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm bg-red-50 text-red-700 hover:bg-red-100 transition-all disabled:opacity-50 disabled:pointer-events-none"
                         >
                           <i className="fas fa-trash mr-2" />
                           Delete
@@ -183,6 +189,7 @@ export default function Requests() {
                     )}
 
                     <button
+                      type="button"
                       onClick={() => navigate('/chat')}
                       className="px-3 py-2 rounded-xl font-bold text-xs sm:text-sm bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
                       title="Open your messages"
@@ -193,11 +200,11 @@ export default function Requests() {
                   </div>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>
     </div>
   );
 }
-

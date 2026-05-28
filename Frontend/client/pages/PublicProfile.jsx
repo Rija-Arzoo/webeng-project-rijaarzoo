@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../services/apiService.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import {
+  patchRequestStatus,
+  removeRequest,
+  isRequestNotFoundError,
+  requestRowId,
+} from '../utils/requestList.js';
 
 export default function PublicProfile() {
   const { id } = useParams();
@@ -57,7 +63,7 @@ export default function PublicProfile() {
     const loadMyRequests = async () => {
       if (!user) return;
       try {
-        const data = await api.requests.getUserRequests(user.id, user.role);
+        const data = await api.requests.getUserRequests();
         setMyRequests(data);
       } catch {
         // ignore
@@ -77,7 +83,7 @@ export default function PublicProfile() {
     setError('');
     try {
       await api.requests.send(person.id, goalStatement);
-      const data = await api.requests.getUserRequests(user.id, user.role);
+      const data = await api.requests.getUserRequests();
       setMyRequests(data);
       setGoalStatement('');
     } catch (e) {
@@ -87,33 +93,43 @@ export default function PublicProfile() {
     }
   };
 
+  const syncMyRequests = () => {
+    api.requests
+      .getUserRequests()
+      .then(setMyRequests)
+      .catch(() => {});
+  };
+
   const handleUpdateStatus = async (status) => {
     if (!pendingReq) return;
-    setSending(true);
     setError('');
+    const previous = myRequests;
+    setMyRequests((list) => patchRequestStatus(list, pendingReq.id, status));
     try {
       await api.requests.updateStatus(pendingReq.id, status);
-      const data = await api.requests.getUserRequests(user.id, user.role);
-      setMyRequests(data);
+      syncMyRequests();
     } catch (e) {
+      setMyRequests(previous);
       setError(e.message || 'Failed to update request');
-    } finally {
-      setSending(false);
     }
   };
 
   const handleCancelDelete = async () => {
     if (!pendingReq) return;
-    setSending(true);
+    const rid = requestRowId(pendingReq);
     setError('');
+    const previous = myRequests;
+    setMyRequests((list) => removeRequest(list, rid));
     try {
-      await api.requests.cancel(pendingReq.id);
-      const data = await api.requests.getUserRequests(user.id, user.role);
-      setMyRequests(data);
+      await api.requests.cancel(rid);
+      syncMyRequests();
     } catch (e) {
-      setError(e.message || 'Failed to cancel/delete request');
-    } finally {
-      setSending(false);
+      if (isRequestNotFoundError(e)) {
+        syncMyRequests();
+      } else {
+        setMyRequests(previous);
+        setError(e.message || 'Failed to cancel/delete request');
+      }
     }
   };
 

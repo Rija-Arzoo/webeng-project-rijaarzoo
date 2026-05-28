@@ -6,7 +6,7 @@ import { compressImageFile } from '../utils/compressImage.js';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, profile, fetchUserProfile, logout } = useAuth();
+  const { user, profile, fetchUserProfile, patchProfile, logout } = useAuth();
 
   const [resumeFile, setResumeFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -159,7 +159,13 @@ export default function Profile() {
     try {
       const result = await api.auth.uploadResume(resumeFile);
       setUploadResult(result);
-      await fetchUserProfile(); // refresh resumeSkills/insights in context
+      patchProfile({
+        resumeSkills: result.resumeSkills || [],
+        resumeSuggestedIndustry: result.resumeSuggestedIndustry || null,
+        resumeSuggestedTopics: result.resumeSuggestedTopics || [],
+        resumeUploadedAt: new Date().toISOString(),
+      });
+      fetchUserProfile();
     } catch (err) {
       setError(err.message || 'Resume upload failed');
     } finally {
@@ -660,6 +666,7 @@ export default function Profile() {
                   </div>
 
                   <button
+                    type="button"
                     onClick={applyToMentorSearch}
                     className="w-full py-3 sm:py-4 bg-indigo-600 hover:bg-indigo-800 text-white text-shadow-indigo font-bold rounded-xl transition-all active:scale-95"
                   >
