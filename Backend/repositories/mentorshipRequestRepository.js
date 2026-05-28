@@ -9,6 +9,13 @@ export const mentorshipRequestRepository = {
 
   deleteById: (id) => MentorshipRequest.findByIdAndDelete(id),
 
+  findExistingForPair: (mentorId, studentId) =>
+    MentorshipRequest.findOne({
+      mentorId,
+      studentId,
+      status: { $in: ['pending', 'accepted'] },
+    }).lean(),
+
   deleteByUserId: (userId) =>
     MentorshipRequest.deleteMany({ $or: [{ mentorId: userId }, { studentId: userId }] }),
 };

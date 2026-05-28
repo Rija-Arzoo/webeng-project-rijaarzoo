@@ -1,46 +1,42 @@
-<<<<<<< HEAD
-import { installPdfNodePolyfills } from '../lib/pdfNodePolyfill.js';
-=======
 import { createRequire } from 'module';
->>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
 import { config } from '../config/index.js';
 import { userRepository } from '../repositories/userRepository.js';
+import { mapProfileResponse } from '../mappers/userMapper.js';
 import {
-  extractIndustryFromText,
-  extractSkillsFromText,
-  suggestedTopicsForSkills,
-} from '../utils/skills.js';
+  applyResumeInsightsToUser,
+  buildResumeInsights,
+} from './resumeInsightsBuilder.js';
 
+const require = createRequire(import.meta.url);
 let PDFParseClass = null;
 
-async function getPDFParse() {
+async function loadPdfParse() {
   if (!PDFParseClass) {
-<<<<<<< HEAD
-    installPdfNodePolyfills();
-    const mod = await import('pdf-parse');
-    PDFParseClass = mod.PDFParse;
-    if (!PDFParseClass) {
-      throw new Error('PDF parser unavailable');
+    try {
+      const mod = await import('pdf-parse');
+      PDFParseClass = mod.PDFParse || mod.default?.PDFParse;
+    } catch {
+      const mod = require('pdf-parse');
+      PDFParseClass = mod.PDFParse || mod.default?.PDFParse || mod;
     }
-=======
-    const require = createRequire(import.meta.url);
-    const mod = require('pdf-parse');
-    PDFParseClass = mod.PDFParse || mod.default?.PDFParse || mod;
->>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
+    if (!PDFParseClass || typeof PDFParseClass !== 'function') {
+      throw new Error('pdf-parse PDFParse class is unavailable');
+    }
   }
   return PDFParseClass;
 }
 
-<<<<<<< HEAD
 async function extractPdfText(fileBuffer) {
-  const PDFParse = await getPDFParse();
+  const PDFParse = await loadPdfParse();
   const parser = new PDFParse({ data: fileBuffer });
-  const parsed = await parser.getText();
-  return (parsed?.text || '').toString();
+  try {
+    const parsed = await parser.getText();
+    return (parsed?.text || '').toString();
+  } finally {
+    await parser.destroy().catch(() => {});
+  }
 }
 
-=======
->>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
 export const resumeService = {
   async uploadResume(userId, fileBuffer) {
     if (!fileBuffer) {
@@ -51,50 +47,18 @@ export const resumeService = {
     if (!user) {
       return { status: 404, body: { message: 'User not found' } };
     }
-<<<<<<< HEAD
-    let text = '';
-    try {
-      text = await extractPdfText(fileBuffer);
-    } catch (err) {
-      const msg = err?.message || String(err);
-      if (/DOMMatrix|ImageData|Path2D/i.test(msg)) {
-        return {
-          status: 500,
-          body: {
-            message:
-              'Resume parsing is not available on this server. Please contact support or try again later.',
-          },
-        };
-      }
-      return {
-        status: 400,
-        body: { message: msg || 'Could not read this PDF file' },
-      };
-    }
-=======
 
-    const PDFParse = await getPDFParse();
-    const parser = new PDFParse({ data: fileBuffer });
-    const parsed = await parser.getText();
-    const text = (parsed?.text || '').toString();
->>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
+    const text = await extractPdfText(fileBuffer);
 
     if (!text.trim()) {
       return { status: 400, body: { message: 'Could not extract text from this PDF' } };
     }
 
-    const resumeSkills = extractSkillsFromText(text);
-    const resumeSuggestedIndustry = extractIndustryFromText(text);
-    const resumeSuggestedTopics = suggestedTopicsForSkills(
-      resumeSkills,
-      resumeSuggestedIndustry
-    );
-
     user.resumeText = text.slice(0, config.resumeTextMaxLength);
-    user.resumeSkills = resumeSkills;
-    user.resumeSuggestedIndustry = resumeSuggestedIndustry;
-    user.resumeSuggestedTopics = resumeSuggestedTopics;
     user.resumeUploadedAt = new Date();
+
+    const insights = await buildResumeInsights(text, user);
+    applyResumeInsightsToUser(user, insights);
 
     await userRepository.save(user);
 
@@ -102,9 +66,43 @@ export const resumeService = {
       status: 200,
       body: {
         success: true,
-        resumeSkills,
-        resumeSuggestedIndustry,
-        resumeSuggestedTopics,
+        analyzedWithAi: insights.analyzedWithAi,
+        resumeSkills: insights.resumeSkills,
+        resumeSuggestedIndustry: insights.resumeSuggestedIndustry,
+        resumeSuggestedTopics: insights.resumeSuggestedTopics,
+        resumeInsightSummary: insights.resumeInsightSummary,
+        resumeUploadedAt: user.resumeUploadedAt,
+        profile: mapProfileResponse(user),
+      },
+    };
+  },
+
+  async refreshInsights(userId) {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      return { status: 404, body: { message: 'User not found' } };
+    }
+    if (!user.resumeText?.trim()) {
+      return {
+        status: 400,
+        body: { message: 'Upload a resume on your Profile page first' },
+      };
+    }
+
+    const insights = await buildResumeInsights(user.resumeText, user);
+    applyResumeInsightsToUser(user, insights);
+    await userRepository.save(user);
+
+    return {
+      status: 200,
+      body: {
+        success: true,
+        analyzedWithAi: insights.analyzedWithAi,
+        resumeSkills: insights.resumeSkills,
+        resumeSuggestedIndustry: insights.resumeSuggestedIndustry,
+        resumeSuggestedTopics: insights.resumeSuggestedTopics,
+        resumeInsightSummary: insights.resumeInsightSummary,
+        profile: mapProfileResponse(user),
       },
     };
   },

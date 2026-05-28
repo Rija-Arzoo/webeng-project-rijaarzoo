@@ -49,6 +49,7 @@ const userSchema = new mongoose.Schema(
     resumeSkills: [{ type: String }],
     resumeSuggestedIndustry: { type: String },
     resumeSuggestedTopics: [{ type: String }],
+    resumeInsightSummary: { type: String, default: '' },
     resumeUploadedAt: { type: Date },
 
     // Password recovery (security questions). Answers are stored hashed.

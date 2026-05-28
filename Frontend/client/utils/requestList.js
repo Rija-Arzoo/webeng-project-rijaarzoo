@@ -23,7 +23,8 @@ const sessionKey = (userId, role) =>
 
 export function readRequestsSessionCache(userId, role) {
   try {
-    const raw = sessionStorage.getItem(sessionKey(userId, role));    if (!raw) return null;
+    const raw = sessionStorage.getItem(sessionKey(userId, role));
+    if (!raw) return null;
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : null;
   } catch {

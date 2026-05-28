@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../services/apiService.jsx';
+import { prefetchAfterLogin } from '../services/prefetch.js';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -11,20 +12,25 @@ export default function Layout() {
   const [unreadMessages, setUnreadMessages] = useState(0);
 
   const menu = [
-    { label: 'Dashboard',     path: '/dashboard', icon: 'fa-gauge-high' },
-    { label: 'Requests',      path: '/requests',  icon: 'fa-inbox' },
-    { label: 'Find Mentors',  path: '/mentors',   icon: 'fa-compass' },
-    { label: 'Messages',      path: '/chat',      icon: 'fa-message' },
-    { label: 'Profile',       path: '/profile',   icon: 'fa-circle-user' },
+    { label: 'Dashboard', path: '/dashboard', icon: 'fa-gauge-high' },
+    { label: 'Requests', path: '/requests', icon: 'fa-inbox' },
+    { label: 'Find Mentors', path: '/mentors', icon: 'fa-compass', studentOnly: true },
+    { label: 'Messages', path: '/chat', icon: 'fa-message' },
+    { label: 'Profile', path: '/profile', icon: 'fa-circle-user' },
   ];
 
   const filteredMenu = menu.filter(i => !i.studentOnly || user?.role === 'student');
 
   useEffect(() => {
+    if (user) prefetchAfterLogin(user);
+  }, [user?.id, user?.role]);
+
+  useEffect(() => {
     if (!user) return undefined;
+    const onChat = location.pathname.includes('/chat');
 
     const loadUnread = async () => {
-      if (document.visibilityState === 'hidden') return;
+      if (document.visibilityState === 'hidden' || onChat) return;
       try {
         const res = await api.chats.getUnreadTotal();
         setUnreadMessages(res.total || 0);
@@ -33,12 +39,15 @@ export default function Layout() {
       }
     };
 
-    loadUnread();
-    const intervalMs = location.pathname.includes('/chat') ? 120000 : 60000;
-    const id = setInterval(loadUnread, intervalMs);
+    if (!onChat) loadUnread();
+    const id = setInterval(() => {
+      if (!location.pathname.includes('/chat')) loadUnread();
+    }, 120000);
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') loadUnread();
+      if (document.visibilityState === 'visible' && !location.pathname.includes('/chat')) {
+        loadUnread();
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
 

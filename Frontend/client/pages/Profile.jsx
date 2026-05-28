@@ -9,6 +9,8 @@ export default function Profile() {
   const { user, profile, fetchUserProfile, patchProfile, logout } = useAuth();
 
   const [resumeFile, setResumeFile] = useState(null);
+  const [resumeInputKey, setResumeInputKey] = useState(0);
+  const [refreshingInsights, setRefreshingInsights] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [promoting, setPromoting] = useState(false);
   const [error, setError] = useState('');
@@ -45,7 +47,6 @@ export default function Profile() {
 
   useEffect(() => {
     // Seed UI from existing profile (loaded via getMe in AuthContext)
-    setUploadResult(null);
     setForm({
       profilePicture: profile?.profilePicture || '',
       bio: profile?.bio || '',
@@ -63,9 +64,38 @@ export default function Profile() {
     });
   }, [profile]);
 
-  const resumeSkills = useMemo(() => profile?.resumeSkills || [], [profile]);
-  const suggestedIndustry = profile?.resumeSuggestedIndustry || null;
-  const suggestedTopics = profile?.resumeSuggestedTopics || [];
+  const hasResumeOnFile = Boolean(profile?.resumeUploadedAt);
+
+  const resumeInsights = useMemo(() => {
+    const fromUpload = uploadResult?.success ? uploadResult : null;
+    return {
+      resumeSkills: fromUpload?.resumeSkills ?? profile?.resumeSkills ?? [],
+      suggestedIndustry:
+        fromUpload?.resumeSuggestedIndustry ?? profile?.resumeSuggestedIndustry ?? null,
+      suggestedTopics:
+        fromUpload?.resumeSuggestedTopics ?? profile?.resumeSuggestedTopics ?? [],
+      insightSummary:
+        fromUpload?.resumeInsightSummary ?? profile?.resumeInsightSummary ?? '',
+      analyzedWithAi: Boolean(
+        fromUpload?.analyzedWithAi ?? (profile?.resumeInsightSummary?.trim() ? true : false)
+      ),
+    };
+  }, [profile, uploadResult]);
+
+  const { resumeSkills, suggestedIndustry, suggestedTopics, insightSummary, analyzedWithAi } =
+    resumeInsights;
+
+  const formatResumeDate = (value) => {
+    if (!value) return '';
+    try {
+      return new Date(value).toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+    } catch {
+      return '';
+    }
+  };
 
   const handleField = (key, val) => setForm((p) => ({ ...p, [key]: val }));
 
@@ -159,17 +189,52 @@ export default function Profile() {
     try {
       const result = await api.auth.uploadResume(resumeFile);
       setUploadResult(result);
-      patchProfile({
-        resumeSkills: result.resumeSkills || [],
-        resumeSuggestedIndustry: result.resumeSuggestedIndustry || null,
-        resumeSuggestedTopics: result.resumeSuggestedTopics || [],
-        resumeUploadedAt: new Date().toISOString(),
-      });
-      fetchUserProfile();
+      if (result.profile) {
+        patchProfile(result.profile);
+      } else {
+        patchProfile({
+          resumeSkills: result.resumeSkills || [],
+          resumeSuggestedIndustry: result.resumeSuggestedIndustry || null,
+          resumeSuggestedTopics: result.resumeSuggestedTopics || [],
+          resumeUploadedAt: result.resumeUploadedAt || new Date().toISOString(),
+        });
+      }
+      setResumeFile(null);
+      setResumeInputKey((k) => k + 1);
+      await fetchUserProfile();
+      setSuccess(
+        result.analyzedWithAi
+          ? 'Resume analyzed with AI — personalized insights are ready.'
+          : 'Resume uploaded — insights updated (add GEMINI_API_KEY for AI analysis).'
+      );
     } catch (err) {
       setError(err.message || 'Resume upload failed');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleRefreshInsights = async () => {
+    if (!hasResumeOnFile) {
+      setError('Upload a resume first, then you can refresh AI insights.');
+      return;
+    }
+    setRefreshingInsights(true);
+    setError('');
+    try {
+      const result = await api.auth.refreshResumeInsights();
+      setUploadResult(result);
+      if (result.profile) patchProfile(result.profile);
+      await fetchUserProfile();
+      setSuccess(
+        result.analyzedWithAi
+          ? 'AI insights refreshed from your resume.'
+          : 'Insights refreshed (check GEMINI_API_KEY in Backend/.env.local for AI).'
+      );
+    } catch (err) {
+      setError(err.message || 'Could not refresh insights');
+    } finally {
+      setRefreshingInsights(false);
     }
   };
 
@@ -206,13 +271,6 @@ export default function Profile() {
     } finally {
       setPromoting(false);
     }
-  };
-
-  const applyToMentorSearch = () => {
-    const skillsParam = (resumeSkills || []).join(',');
-    const industryParam = suggestedIndustry || '';
-    const searchParam = '';
-    navigate(`/mentors?industry=${encodeURIComponent(industryParam)}&skills=${encodeURIComponent(skillsParam)}&search=${encodeURIComponent(searchParam)}`);
   };
 
   return (
@@ -574,20 +632,47 @@ export default function Profile() {
                 Resume Upload (PDF)
               </h2>
 
+              {hasResumeOnFile && (
+                <div
+                  className="mb-4 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3"
+                  role="status"
+                >
+                  <i className="fas fa-circle-check text-emerald-600 mt-0.5" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-emerald-900">Resume saved on your profile</p>
+                    <p className="text-xs text-emerald-800/90 mt-0.5">
+                      Last analyzed {formatResumeDate(profile.resumeUploadedAt)}
+                      {insightSummary ? ' — insights stay available when you leave this page.' : '.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <form onSubmit={handleUpload} className="space-y-4">
                 <div>
                   <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-2">
-                    Select PDF
+                    {hasResumeOnFile ? 'Replace PDF' : 'Select PDF'}
                   </label>
                   <input
+                    key={resumeInputKey}
                     type="file"
                     accept="application/pdf"
                     onChange={(e) => setResumeFile(e.target.files?.[0] || null)}
                     className="block w-full text-sm text-slate-700 bg-slate-50 border-2 border-slate-100 rounded-xl p-3"
                   />
-                  <p className="text-xs text-slate-500 mt-2">
-                    We extract skills/keywords from your resume and suggest mentoring focus areas.
-                  </p>
+                  {resumeFile ? (
+                    <p className="text-xs text-indigo-700 font-semibold mt-2">
+                      Selected: {resumeFile.name}
+                    </p>
+                  ) : hasResumeOnFile ? (
+                    <p className="text-xs text-slate-500 mt-2">
+                      Choose a new PDF only if you want to replace your current resume.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-500 mt-2">
+                      We analyze your resume with AI (Gemini) for accurate skills and mentorship focus.
+                    </p>
+                  )}
                 </div>
 
                 <button
@@ -598,12 +683,12 @@ export default function Profile() {
                   {uploading ? (
                     <span className="flex items-center justify-center gap-2">
                       <i className="fas fa-spinner animate-spin" />
-                      Uploading...
+                      Analyzing with AI…
                     </span>
                   ) : (
                     <span className="flex items-center justify-center gap-2">
                       <i className="fas fa-file-pdf" />
-                      Upload & Get Suggestions
+                      {hasResumeOnFile ? 'Upload & Re-analyze' : 'Upload & Get AI Insights'}
                     </span>
                   )}
                 </button>
@@ -619,14 +704,35 @@ export default function Profile() {
             </div>
 
             <div className="relative z-10">
-              <h2 className="text-xl sm:text-2xl font-black mb-3">Resume Insights</h2>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <h2 className="text-xl sm:text-2xl font-black">Resume Insights</h2>
+                {analyzedWithAi && (
+                  <span className="shrink-0 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide bg-indigo-500/30 text-indigo-100 border border-indigo-400/30">
+                    AI
+                  </span>
+                )}
+              </div>
 
-              {(!suggestedIndustry && resumeSkills.length === 0 && suggestedTopics.length === 0) ? (
+              {(!suggestedIndustry &&
+                resumeSkills.length === 0 &&
+                suggestedTopics.length === 0 &&
+                !insightSummary) ? (
                 <div className="text-slate-200 text-sm sm:text-base">
                   Upload your PDF to see skill-based mentorship suggestions.
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {insightSummary && (
+                    <div>
+                      <div className="text-xs uppercase font-bold text-indigo-200 tracking-wider mb-2">
+                        AI review
+                      </div>
+                      <p className="text-slate-200 text-sm sm:text-base leading-relaxed">
+                        {insightSummary}
+                      </p>
+                    </div>
+                  )}
+
                   <div>
                     <div className="text-xs uppercase font-bold text-indigo-200 tracking-wider mb-2">
                       Suggested Industry
@@ -665,21 +771,32 @@ export default function Profile() {
                     </ul>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={applyToMentorSearch}
-                    className="w-full py-3 sm:py-4 bg-indigo-600 hover:bg-indigo-800 text-white text-shadow-indigo font-bold rounded-xl transition-all active:scale-95"
-                  >
-                    <span className="flex items-center justify-center gap-2">
-                      <i className="fas fa-magnifying-glass" />
-                      Find mentors matching my resume
-                    </span>
-                  </button>
                 </div>
               )}
 
+              {hasResumeOnFile && (
+                <button
+                  type="button"
+                  onClick={handleRefreshInsights}
+                  disabled={refreshingInsights || uploading}
+                  className="mt-5 w-full py-2.5 rounded-xl text-sm font-bold border border-white/20 bg-white/10 hover:bg-white/15 text-white transition-all disabled:opacity-50"
+                >
+                  {refreshingInsights ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <i className="fas fa-spinner animate-spin" />
+                      Refreshing AI insights…
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      <i className="fas fa-rotate" />
+                      Refresh AI insights
+                    </span>
+                  )}
+                </button>
+              )}
+
               {uploadResult?.success && (
-                <div className="mt-4 text-xs text-slate-300">
+                <div className="mt-3 text-xs text-slate-300">
                   Updated {new Date().toLocaleString()}
                 </div>
               )}

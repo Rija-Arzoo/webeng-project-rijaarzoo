@@ -5,6 +5,7 @@ import {
   getMe,
   updateProfile,
   uploadResume,
+  refreshResumeInsights,
   forgotPasswordQuestions,
   resetPasswordWithSecurityQuestions,
   deleteMyAccount,
@@ -34,5 +35,6 @@ const upload = multer({
 });
 
 router.post('/resume', auth, upload.single('resume'), uploadResume);
+router.post('/resume/refresh', auth, refreshResumeInsights);
 
 export default router;

@@ -7,6 +7,7 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
   jwtExpire: process.env.JWT_EXPIRE || '7d',
   geminiRankTimeoutMs: 1500,
+  geminiResumeTimeoutMs: Number(process.env.GEMINI_RESUME_TIMEOUT_MS) || 20_000,
   messagePageSize: 80,
   messagePageMax: 150,
   resumeTextMaxLength: 200000,

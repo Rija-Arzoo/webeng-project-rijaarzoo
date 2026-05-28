@@ -5,15 +5,30 @@ import { api } from '../services/apiService.jsx';
 import { socketService } from '../services/socketService.jsx';
 
 const SOCKET_ENABLED = import.meta.env.VITE_ENABLE_SOCKET !== 'false';
-const CHAT_POLL_MS = 8000;
+const CHAT_POLL_MS = 45000;
+const CONVERSATIONS_CACHE_KEY = 'chat_conversations_cache';
 
 export default function ChatInterface() {
   const { conversationId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [conversations, setConversations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [conversations, setConversations] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem(CONVERSATIONS_CACHE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      return !sessionStorage.getItem(CONVERSATIONS_CACHE_KEY);
+    } catch {
+      return true;
+    }
+  });
   const [error, setError] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -49,7 +64,7 @@ export default function ChatInterface() {
       );
       setConversations(sorted);
       conversationsCacheRef.current = sorted;
-      sessionStorage.setItem('chat_conversations_cache', JSON.stringify(sorted));
+      sessionStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(sorted));
     } catch (err) {
       setError(err.message);
       console.error('Failed to load conversations:', err);
@@ -60,7 +75,7 @@ export default function ChatInterface() {
 
   const loadMessages = async (convId) => {
     try {
-      const response = await api.chats.getMessages(convId);
+      const response = await api.chats.getMessages(convId, 30, 0);
       const nextMessages = response.messages || [];
       setMessages(nextMessages);
       messagesCacheRef.current.set(convId, nextMessages);
@@ -77,7 +92,7 @@ export default function ChatInterface() {
   useEffect(() => {
     // Fast paint from cached conversations, then refresh in background.
     try {
-      const raw = sessionStorage.getItem('chat_conversations_cache');
+      const raw = sessionStorage.getItem(CONVERSATIONS_CACHE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -105,9 +120,8 @@ export default function ChatInterface() {
 
     const poll = () => {
       if (document.visibilityState === 'hidden') return;
-      loadMessages(activeConversationId);
-      api.chats.invalidateChatCache();
       loadConversations();
+      loadMessages(activeConversationId);
     };
 
     const id = setInterval(poll, CHAT_POLL_MS);
@@ -368,7 +382,7 @@ export default function ChatInterface() {
 
         {/* Conversations */}
         <div className="flex-1 overflow-y-auto">
-          {loading ? (
+          {loading && conversations.length === 0 ? (
             <div className="p-6 text-center text-slate-400">
               <i className="fas fa-spinner animate-spin mr-2"></i>
               Loading...

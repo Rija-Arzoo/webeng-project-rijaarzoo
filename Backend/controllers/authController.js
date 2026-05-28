@@ -39,6 +39,17 @@ export const uploadResume = asyncHandler(async (req, res) => {
   }
 });
 
+export const refreshResumeInsights = asyncHandler(async (req, res) => {
+  try {
+    sendServiceResult(res, await resumeService.refreshInsights(req.userId));
+  } catch (err) {
+    console.error('Resume insights refresh error:', err);
+    res.status(500).json({
+      message: 'Could not refresh resume insights: ' + (err?.message || String(err)),
+    });
+  }
+});
+
 export const forgotPasswordQuestions = asyncHandler(async (req, res) => {
   sendServiceResult(res, await passwordRecoveryService.getSecurityQuestions(req.body?.email));
 });

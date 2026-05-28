@@ -20,7 +20,7 @@ export const userRepository = {
   findPublicById: (id) =>
     User.findById(id)
       .select(
-        'name role profilePicture bio location skills company industry title headline isVerified resumeSkills resumeSuggestedIndustry resumeSuggestedTopics resumeUploadedAt'
+        'name role profilePicture bio location skills company industry title headline isVerified resumeSkills resumeSuggestedIndustry resumeSuggestedTopics resumeInsightSummary resumeUploadedAt'
       )
       .lean(),
 

@@ -1,187 +1,130 @@
 /**
- * API Service for Alumni Mentorship Network
- * Handles all HTTP requests to the backend
+ * API Service — local dev uses Vite proxy `/api`; production uses VITE_API_URL from Vercel.
  */
 
-import { getCached, setCached, invalidateCache } from './apiCache.js';
+import { API_BASE_URL } from './apiConfig.js';
+import { getCached, setCached, invalidateCache, cachedGetSWR } from './apiCache.js';
+import { dedupeRequest } from './requestDedupe.js';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 25_000;
 
-const cachedGet = async (cacheKey, endpoint, ttlMs = 45000) => {
-  const hit = getCached(cacheKey);
-  if (hit) return hit;
-  const data = await request(endpoint, { method: 'GET' });
-  setCached(cacheKey, data, ttlMs);
-  return data;
-};
-
-// Helper to get auth token
 const getAuthToken = () => {
-  const session = localStorage.getItem('alumni_session');
-  if (session) {
-    try {
-      const { token } = JSON.parse(session);
-      return token;
-    } catch {
-      return null;
-    }
+  try {
+    return JSON.parse(localStorage.getItem('alumni_session') || '{}').token || null;
+  } catch {
+    return null;
   }
-  return null;
 };
 
-// Helper to make API requests
 const request = async (endpoint, options = {}) => {
   const token = getAuthToken();
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
-  const headers = {
-    ...options.headers,
-  };
+  const headers = { ...options.headers };
 
-  if (!isFormData) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  if (token) {
-    headers['x-auth-token'] = token;
-  }
+  if (!isFormData) headers['Content-Type'] = 'application/json';
+  if (token) headers['x-auth-token'] = token;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  const config = {
-    cache: 'no-store',
-    ...options,
-    headers,
-    signal: controller.signal,
-  };
-
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      cache: 'no-store',
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
     clearTimeout(timeoutId);
-    const data = await response.json();
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error('Invalid response from server');
+    }
 
     if (!response.ok) {
       throw new Error(data.message || 'Request failed');
     }
-
     return data;
   } catch (error) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
-      throw new Error('Server is not responding. Is the backend running on port 5000?');
+      throw new Error(
+        'Request timed out. Start the backend: cd Backend && npm run dev'
+      );
     }
-    console.error('API Error:', error);
+    if (error instanceof TypeError) {
+      throw new Error(
+        import.meta.env.DEV
+          ? 'Cannot reach API. Run backend on port 5000 (cd Backend && npm run dev) and use VITE_API_URL=/api in Frontend/.env.local'
+          : 'Network error — check API URL and that the backend is deployed.'
+      );
+    }
     throw error;
   }
 };
 
-/**
- * API Service exports
- */
 export const api = {
-  // ========== PUBLIC USERS ==========
   users: {
-    getPublicProfile: async (userId) => {
-      return request(`/users/${userId}/public`, { method: 'GET' });
-    },
+    getPublicProfile: (userId) => request(`/users/${userId}/public`, { method: 'GET' }),
   },
 
-  // ========== AUTHENTICATION ==========
   auth: {
-    register: async (userData) => {
-      return request('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify(userData),
-      });
-    },
-
-    login: async (email, password) => {
-      return request('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-    },
-
-    forgotPasswordQuestions: async (email) => {
-      return request('/auth/forgot-password/questions', {
+    register: (userData) =>
+      request('/auth/register', { method: 'POST', body: JSON.stringify(userData) }),
+    login: (email, password) =>
+      request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+    forgotPasswordQuestions: (email) =>
+      request('/auth/forgot-password/questions', {
         method: 'POST',
         body: JSON.stringify({ email }),
-      });
-    },
-
-    resetPasswordWithSecurityQuestions: async (email, answers, newPassword) => {
-      return request('/auth/forgot-password/reset', {
+      }),
+    resetPasswordWithSecurityQuestions: (email, answers, newPassword) =>
+      request('/auth/forgot-password/reset', {
         method: 'POST',
         body: JSON.stringify({ email, answers, newPassword }),
-      });
-    },
-
-    getMe: async () => {
-      return request('/auth/me', {
-        method: 'GET',
-      });
-    },
-
-    updateProfile: async (profileData) => {
-      return request('/auth/profile', {
-        method: 'PUT',
-        body: JSON.stringify(profileData),
-      });
-    },
-
-    deleteMyAccount: async (password) => {
-      return request('/auth/account', {
-        method: 'DELETE',
-        body: JSON.stringify({ password }),
-      });
-    },
-
-    // Upload resume (PDF) and extract skills/insights on the backend
-    uploadResume: async (resumeFile) => {
+      }),
+    getMe: () => request('/auth/me', { method: 'GET' }),
+    updateProfile: (profileData) =>
+      request('/auth/profile', { method: 'PUT', body: JSON.stringify(profileData) }),
+    deleteMyAccount: (password) =>
+      request('/auth/account', { method: 'DELETE', body: JSON.stringify({ password }) }),
+    uploadResume: (resumeFile) => {
       const fd = new FormData();
       fd.append('resume', resumeFile);
-      return request('/auth/resume', {
-        method: 'POST',
-        body: fd,
-      });
+      return request('/auth/resume', { method: 'POST', body: fd });
     },
+    refreshResumeInsights: () =>
+      request('/auth/resume/refresh', { method: 'POST', body: JSON.stringify({}) }),
   },
 
-  // ========== MENTORS ==========
   mentors: {
     getAll: async (filters = {}) => {
       const params = new URLSearchParams();
       if (filters.industry) params.append('industry', filters.industry);
       if (filters.skill) params.append('skill', filters.skill);
       if (filters.search) params.append('search', filters.search);
-
       const queryString = params.toString();
-      const endpoint = `/mentors${queryString ? '?' + queryString : ''}`;
+      const endpoint = `/mentors${queryString ? `?${queryString}` : ''}`;
       const cacheKey = `mentors:${queryString}`;
-      return cachedGet(cacheKey, endpoint, 30000);
+      return dedupeRequest(cacheKey, () =>
+        cachedGetSWR(cacheKey, () => request(endpoint, { method: 'GET' }), 120_000)
+      );
     },
-
-    getById: async (mentorId) => {
-      return request(`/mentors/${mentorId}`, { method: 'GET' });
-    },
-
-    search: async (industry, skills) => {
-      return request('/mentors/search', {
+    getById: (mentorId) => request(`/mentors/${mentorId}`, { method: 'GET' }),
+    search: (industry, skills) =>
+      request('/mentors/search', {
         method: 'POST',
         body: JSON.stringify({ industry, skills }),
-      });
-    },
-
-    toggleAvailability: async (isAcceptingMentorship) => {
-      return request('/mentors/availability', {
+      }),
+    toggleAvailability: (isAcceptingMentorship) =>
+      request('/mentors/availability', {
         method: 'PUT',
         body: JSON.stringify({ isAcceptingMentorship }),
-      });
-    },
+      }),
   },
 
-  // ========== MENTORSHIP REQUESTS ==========
   requests: {
     send: async (mentorId, goalStatement) => {
       const res = await request('/requests', {
@@ -192,14 +135,11 @@ export const api = {
       return res;
     },
 
-    // Auth token determines user; always fetch live list (no in-memory cache).
-    getUserRequests: async () => {
-      invalidateCache('requests:');
-      const data = await request('/requests', { method: 'GET' });
-      return data.requests || [];
-    },
+    getUserRequests: () =>
+      dedupeRequest('requests:list', () =>
+        cachedGetSWR('requests:list', () => request('/requests', { method: 'GET' }), 90_000)
+      ).then((data) => data.requests || []),
 
-    // Used by Dashboard.jsx buttons
     updateStatus: async (requestId, status) => {
       const res = await request(`/requests/${requestId}`, {
         method: 'PUT',
@@ -209,66 +149,48 @@ export const api = {
       return res;
     },
 
-    getAll: async () => {
-      return request('/requests', { method: 'GET' });
-    },
-
-    getById: async (requestId) => {
-      return request(`/requests/${requestId}`, { method: 'GET' });
-    },
-
-    accept: async (requestId) => {
-      return request(`/requests/${requestId}/accept`, {
-        method: 'PUT',
-      });
-    },
-
-    reject: async (requestId) => {
-      return request(`/requests/${requestId}/reject`, {
-        method: 'PUT',
-      });
-    },
-
+    getAll: () => request('/requests', { method: 'GET' }),
+    getById: (requestId) => request(`/requests/${requestId}`, { method: 'GET' }),
+    accept: (requestId) => request(`/requests/${requestId}/accept`, { method: 'PUT' }),
+    reject: (requestId) => request(`/requests/${requestId}/reject`, { method: 'PUT' }),
     cancel: async (requestId) => {
-      const res = await request(`/requests/${requestId}`, {
-        method: 'DELETE',
-      });
+      const res = await request(`/requests/${requestId}`, { method: 'DELETE' });
       invalidateCache('requests:');
       return res;
     },
   },
 
-  // ========== CHAT & MESSAGING ==========
   chats: {
-    getUnreadTotal: async () => {
-      return cachedGet('chats:unread', '/chats/unread-total', 15000);
+    getUnreadTotal: () =>
+      cachedGetSWR('chats:unread', () => request('/chats/unread-total', { method: 'GET' }), 45_000),
+
+    getConversations: ({ fresh = false } = {}) => {
+      const cacheKey = 'chats:conversations';
+      if (fresh) {
+        return request('/chats/conversations', { method: 'GET' }).then((data) => {
+          setCached(cacheKey, data, 30_000);
+          return data;
+        });
+      }
+      return cachedGetSWR(
+        cacheKey,
+        () => request('/chats/conversations', { method: 'GET' }),
+        30_000
+      );
     },
 
-    // Conversations
-    getConversations: async () => {
-      return cachedGet('chats:conversations', '/chats/conversations', 12000);
-    },
+    getConversation: (conversationId) =>
+      request(`/chats/conversations/${conversationId}`, { method: 'GET' }),
 
-    getConversation: async (conversationId) => {
-      return request(`/chats/conversations/${conversationId}`, {
-        method: 'GET',
-      });
-    },
-
-    createConversation: async (participantId) => {
-      return request('/chats/conversations', {
+    createConversation: (participantId) =>
+      request('/chats/conversations', {
         method: 'POST',
         body: JSON.stringify({ participantId }),
-      });
-    },
+      }),
 
-    markConversationAsRead: async (conversationId) => {
-      return request(`/chats/conversations/${conversationId}/read`, {
-        method: 'PUT',
-      });
-    },
+    markConversationAsRead: (conversationId) =>
+      request(`/chats/conversations/${conversationId}/read`, { method: 'PUT' }),
 
-    // Messages
     sendMessage: async (conversationId, text) => {
       const res = await request('/chats/messages', {
         method: 'POST',
@@ -280,22 +202,21 @@ export const api = {
 
     invalidateChatCache: () => invalidateCache('chats:'),
 
-    getMessages: async (conversationId, limit = 50, skip = 0) => {
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-        skip: skip.toString(),
-      });
-      return request(
-        `/chats/conversations/${conversationId}/messages?${params}`,
-        { method: 'GET' }
+    getMessages: (conversationId, limit = 30, skip = 0) => {
+      const params = new URLSearchParams({ limit: String(limit), skip: String(skip) });
+      const cacheKey = `chats:messages:${conversationId}:${limit}:${skip}`;
+      return cachedGetSWR(
+        cacheKey,
+        () =>
+          request(`/chats/conversations/${conversationId}/messages?${params}`, {
+            method: 'GET',
+          }),
+        20_000
       );
     },
 
-    markMessageAsRead: async (messageId) => {
-      return request(`/chats/messages/${messageId}/read`, {
-        method: 'PUT',
-      });
-    },
+    markMessageAsRead: (messageId) =>
+      request(`/chats/messages/${messageId}/read`, { method: 'PUT' }),
   },
 };
 

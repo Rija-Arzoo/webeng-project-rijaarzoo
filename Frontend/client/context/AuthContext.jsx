@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { api } from '../services/apiService.jsx';
+import { prefetchAfterLogin } from '../services/prefetch.js';
 
 const AuthContext = createContext();
 
@@ -8,6 +9,26 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const profileFetchGen = useRef(0);
+
+  const persistSessionProfile = (nextProfile, nextUser) => {
+    const session = localStorage.getItem('alumni_session');
+    if (!session) return;
+    try {
+      const parsed = JSON.parse(session);
+      localStorage.setItem(
+        'alumni_session',
+        JSON.stringify({
+          ...parsed,
+          user: nextUser ?? parsed.user,
+          profile: nextProfile,
+          profileFetchedAt: Date.now(),
+        })
+      );
+    } catch {
+      // ignore malformed session entries
+    }
+  };
 
   const persistSessionUser = (nextUser) => {
     const session = localStorage.getItem('alumni_session');
@@ -37,15 +58,22 @@ export const AuthProvider = ({ children }) => {
           setProfile(sessionData.profile);
         }
         // Refresh profile only if stale (>5 min) — avoids heavy /me on every page load.
-        if (sessionData.token) {
+        if (sessionData.token && sessionData.user) {
+          const runPrefetch = () => prefetchAfterLogin(sessionData.user);
+          if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(runPrefetch, { timeout: 1500 });
+          } else {
+            setTimeout(runPrefetch, 50);
+          }
+
           const fetchedAt = sessionData.profileFetchedAt || 0;
           const stale = Date.now() - fetchedAt > 5 * 60 * 1000;
           if (stale || !sessionData.profile) {
             const run = () => fetchUserProfile();
             if (typeof requestIdleCallback === 'function') {
-              requestIdleCallback(run, { timeout: 1000 });
+              requestIdleCallback(run, { timeout: 2000 });
             } else {
-              setTimeout(run, 0);
+              setTimeout(run, 100);
             }
           }
         }
@@ -57,44 +85,61 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
+  const mergeProfileWithResumeGuard = (prev, serverProfile) => {
+    if (!serverProfile) return prev ?? null;
+    if (!prev) return serverProfile;
+
+    const prevUploaded = prev.resumeUploadedAt
+      ? new Date(prev.resumeUploadedAt).getTime()
+      : 0;
+    const serverUploaded = serverProfile.resumeUploadedAt
+      ? new Date(serverProfile.resumeUploadedAt).getTime()
+      : 0;
+
+    if (prevUploaded > serverUploaded) {
+      return {
+        ...serverProfile,
+        resumeSkills: prev.resumeSkills,
+        resumeSuggestedIndustry: prev.resumeSuggestedIndustry,
+        resumeSuggestedTopics: prev.resumeSuggestedTopics,
+        resumeInsightSummary: prev.resumeInsightSummary,
+        resumeUploadedAt: prev.resumeUploadedAt,
+      };
+    }
+    return serverProfile;
+  };
+
   /**
-   * Fetch current user profile
+   * Fetch current user profile (ignores stale responses when a newer fetch or patch ran).
    */
   const fetchUserProfile = async () => {
+    const gen = ++profileFetchGen.current;
     try {
       const response = await api.auth.getMe();
-      setProfile(response.profile);
-      setUser((prev) => {
-        if (!prev) return prev;
-        const merged = {
-          ...prev,
-          id: response.profile.id || prev.id,
-          name: response.profile.name || prev.name,
-          email: response.profile.email || prev.email,
-          role: response.profile.role || prev.role,
-          profilePicture: response.profile.profilePicture || prev.profilePicture,
-        };
-        const session = localStorage.getItem('alumni_session');
-        if (session) {
-          try {
-            const parsed = JSON.parse(session);
-            localStorage.setItem(
-              'alumni_session',
-              JSON.stringify({
-                ...parsed,
-                user: merged,
-                profile: response.profile,
-                profileFetchedAt: Date.now(),
-              })
-            );
-          } catch {
-            persistSessionUser(merged);
-          }
-        }
-        return merged;
+      if (gen !== profileFetchGen.current) return response;
+
+      const serverProfile = response.profile;
+      setProfile((prev) => {
+        const next = mergeProfileWithResumeGuard(prev, serverProfile);
+        setUser((u) => {
+          if (!u) return u;
+          const merged = {
+            ...u,
+            id: serverProfile.id || u.id,
+            name: serverProfile.name || u.name,
+            email: serverProfile.email || u.email,
+            role: serverProfile.role || u.role,
+            profilePicture: serverProfile.profilePicture || u.profilePicture,
+          };
+          persistSessionProfile(next, merged);
+          return merged;
+        });
+        return next;
       });
+      return response;
     } catch (err) {
       console.error('Failed to fetch profile:', err);
+      throw err;
     }
   };
 
@@ -113,6 +158,7 @@ export const AuthProvider = ({ children }) => {
         user: response.user,
       }));
 
+      prefetchAfterLogin(response.user);
       fetchUserProfile().catch((err) => console.error('Profile refresh:', err));
 
       return response;
@@ -137,6 +183,7 @@ export const AuthProvider = ({ children }) => {
         user: response.user,
       }));
 
+      prefetchAfterLogin(response.user);
       fetchUserProfile().catch((err) => console.error('Profile refresh:', err));
 
       return response;
@@ -186,24 +233,10 @@ export const AuthProvider = ({ children }) => {
   /** Merge fields into profile immediately (e.g. after resume upload). */
   const patchProfile = (partial) => {
     if (!partial || typeof partial !== 'object') return;
+    profileFetchGen.current += 1;
     setProfile((prev) => {
       const next = prev ? { ...prev, ...partial } : { ...partial };
-      const session = localStorage.getItem('alumni_session');
-      if (session) {
-        try {
-          const parsed = JSON.parse(session);
-          localStorage.setItem(
-            'alumni_session',
-            JSON.stringify({
-              ...parsed,
-              profile: next,
-              profileFetchedAt: Date.now(),
-            })
-          );
-        } catch {
-          // ignore malformed session
-        }
-      }
+      persistSessionProfile(next, null);
       return next;
     });
   };

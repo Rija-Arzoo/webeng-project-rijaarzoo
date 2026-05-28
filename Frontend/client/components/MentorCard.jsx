@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../services/apiService.jsx';
 import Avatar from './Avatar.jsx';
+import { getInitials } from '../utils/initials.js';
 
 export default function MentorCard({ mentor, profile }) {
+  const initials = getInitials(mentor?.name);
   const [showModal, setShowModal] = useState(false);
   const [goalStatement, setGoalStatement] = useState('');
   const [loading, setLoading] = useState(false);

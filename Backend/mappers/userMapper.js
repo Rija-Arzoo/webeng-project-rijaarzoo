@@ -1,11 +1,7 @@
 import { avatarUrl } from '../lib/avatar.js';
 
 export const mapAuthUser = (user) => ({
-<<<<<<< HEAD
-  id: user._id.toString(),
-=======
   id: user._id,
->>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
   name: user.name,
   email: user.email,
   role: user.role,
@@ -14,11 +10,7 @@ export const mapAuthUser = (user) => ({
 });
 
 export const mapLoginUser = (user) => ({
-<<<<<<< HEAD
-  id: user._id.toString(),
-=======
   id: user._id,
->>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
   name: user.name,
   email: user.email,
   role: user.role,
@@ -30,11 +22,7 @@ export const mapProfileResponse = (user) => {
   const displayPicture = pic?.startsWith?.('http') ? pic : avatarUrl(pic, user._id.toString());
 
   return {
-<<<<<<< HEAD
-    id: user._id.toString(),
-=======
     id: user._id,
->>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
     name: user.name,
     email: user.email,
     role: user.role,
@@ -61,6 +49,7 @@ export const mapProfileResponse = (user) => {
     resumeSkills: user.resumeSkills || [],
     resumeSuggestedIndustry: user.resumeSuggestedIndustry || null,
     resumeSuggestedTopics: user.resumeSuggestedTopics || [],
+    resumeInsightSummary: user.resumeInsightSummary || '',
     resumeUploadedAt: user.resumeUploadedAt || null,
   };
 };
@@ -81,5 +70,6 @@ export const mapPublicProfile = (user, profile) => ({
   resumeSkills: user.resumeSkills || [],
   resumeSuggestedIndustry: user.resumeSuggestedIndustry || null,
   resumeSuggestedTopics: user.resumeSuggestedTopics || [],
+  resumeInsightSummary: user.resumeInsightSummary || '',
   resumeUploadedAt: user.resumeUploadedAt || null,
 });

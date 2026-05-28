@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { api } from '../services/apiService.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useMentorshipRequests } from '../hooks/useMentorshipRequests.js';
 import { requestRowId } from '../utils/requestList.js';
@@ -10,6 +11,15 @@ const CAREER_TIPS = [
   'Review your profile headline — mentors scan it first.',
 ];
 
+function hasResumeInsights(profile) {
+  return Boolean(
+    profile?.resumeInsightSummary ||
+      profile?.resumeSuggestedIndustry ||
+      profile?.resumeSkills?.length ||
+      profile?.resumeSuggestedTopics?.length
+  );
+}
+
 const statusConfig = {
   accepted: { label: 'Accepted', bg: '#dcfce7', color: '#16a34a' },
   rejected: { label: 'Declined', bg: '#fee2e2', color: '#dc2626' },
@@ -17,7 +27,7 @@ const statusConfig = {
 };
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, profile, fetchUserProfile, patchProfile } = useAuth();
   const {
     requests,
     loading,
@@ -30,6 +40,32 @@ export default function Dashboard() {
   const [aiTip] = useState(
     () => CAREER_TIPS[Math.floor(Math.random() * CAREER_TIPS.length)]
   );
+  const [insightsRefreshing, setInsightsRefreshing] = useState(false);
+
+  const resumeInsights = useMemo(() => {
+    if (!hasResumeInsights(profile)) return null;
+    return {
+      industry: profile.resumeSuggestedIndustry,
+      skills: profile.resumeSkills || [],
+      topics: profile.resumeSuggestedTopics || [],
+      summary: profile.resumeInsightSummary || '',
+    };
+  }, [profile]);
+
+  const handleRefreshInsights = async () => {
+    setInsightsRefreshing(true);
+    try {
+      if (profile?.resumeUploadedAt) {
+        const result = await api.auth.refreshResumeInsights();
+        if (result.profile) patchProfile(result.profile);
+      }
+      await fetchUserProfile();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setInsightsRefreshing(false);
+    }
+  };
 
   const handleAction = async (id, status) => {
     try {
@@ -225,11 +261,60 @@ export default function Dashboard() {
                 </div>
                 <h3 className="font-display font-bold text-base" style={{ color: '#e4e4e7' }}>AI Career Insights</h3>
               </div>
-              <p className="text-sm leading-relaxed flex-1" style={{ color: '#a1a1aa' }}>
-                {aiTip}
-              </p>
-              <button type="button" className="btn-primary w-full mt-5 py-2.5 text-sm">
-                <i className="fas fa-rotate text-xs"></i> Refresh Insights
+              {resumeInsights ? (
+                <div className="flex-1 space-y-3 text-sm" style={{ color: '#a1a1aa' }}>
+                  {resumeInsights.summary && (
+                    <p className="leading-relaxed text-zinc-300">{resumeInsights.summary}</p>
+                  )}
+                  {resumeInsights.industry && (
+                    <p>
+                      <span className="font-semibold text-zinc-300">Industry:</span>{' '}
+                      {resumeInsights.industry}
+                    </p>
+                  )}
+                  {resumeInsights.skills.length > 0 && (
+                    <div>
+                      <p className="font-semibold text-zinc-300 mb-1.5">Skills from resume</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {resumeInsights.skills.slice(0, 6).map((skill) => (
+                          <span
+                            key={skill}
+                            className="px-2 py-0.5 rounded-full text-xs font-medium"
+                            style={{ background: 'rgba(255,255,255,.08)', color: '#e4e4e7' }}
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {resumeInsights.topics.length > 0 && (
+                    <div>
+                      <p className="font-semibold text-zinc-300 mb-1">Mentorship focus</p>
+                      <ul className="list-disc pl-4 space-y-1">
+                        {resumeInsights.topics.slice(0, 3).map((topic) => (
+                          <li key={topic}>{topic}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm leading-relaxed flex-1" style={{ color: '#a1a1aa' }}>
+                  {aiTip}
+                  <span className="block mt-3 text-xs text-zinc-500">
+                    Upload your resume on Profile to unlock personalized insights here.
+                  </span>
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleRefreshInsights}
+                disabled={insightsRefreshing}
+                className="btn-primary w-full mt-5 py-2.5 text-sm disabled:opacity-60"
+              >
+                <i className={`fas fa-rotate text-xs${insightsRefreshing ? ' fa-spin' : ''}`}></i>
+                {insightsRefreshing ? ' Refreshing…' : ' Refresh Insights'}
               </button>
             </div>
           </div>

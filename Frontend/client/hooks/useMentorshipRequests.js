@@ -88,7 +88,7 @@ export function useMentorshipRequests(user) {
       setRequests((prev) => patchRequestStatus(prev, rid, status));
       try {
         await api.requests.updateStatus(rid, status);
-        await fetchRequests({ background: true });
+        fetchRequests({ background: true });
       } catch (err) {
         setRequests(snapshot);
         throw err;
@@ -113,10 +113,10 @@ export function useMentorshipRequests(user) {
 
       try {
         await api.requests.cancel(rid);
-        await fetchRequests({ background: true });
+        fetchRequests({ background: true });
       } catch (err) {
         if (isRequestNotFoundError(err)) {
-          await fetchRequests({ background: true });
+          fetchRequests({ background: true });
         } else {
           setRequests(snapshot);
           if (userId && role) writeRequestsSessionCache(userId, role, snapshot);

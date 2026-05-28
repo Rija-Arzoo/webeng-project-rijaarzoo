@@ -20,11 +20,7 @@ export const requestService = {
     return {
       status: 200,
       body: { success: true, requests: formatted },
-<<<<<<< HEAD
-      cacheControl: 'private, no-store',
-=======
       cacheControl: 'private, max-age=15',
->>>>>>> a2b84ca3c62e4c999de1856aaf496bcedaab114d
     };
   },
 
@@ -49,6 +45,28 @@ export const requestService = {
     }
     if (mentor.role !== 'alumni') {
       return { status: 400, body: { message: 'Invalid mentor role' } };
+    }
+
+    const existingConversation = await conversationRepository.findByParticipants([
+      mentorId,
+      userId,
+    ]);
+    if (existingConversation) {
+      return {
+        status: 400,
+        body: { message: 'You are already connected with this mentor' },
+      };
+    }
+
+    const existingRequest = await mentorshipRequestRepository.findExistingForPair(
+      mentorId,
+      userId
+    );
+    if (existingRequest) {
+      return {
+        status: 400,
+        body: { message: 'You already have an active request for this mentor' },
+      };
     }
 
     const request = await mentorshipRequestRepository.create({
