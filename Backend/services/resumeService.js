@@ -8,33 +8,27 @@ import {
 } from './resumeInsightsBuilder.js';
 
 const require = createRequire(import.meta.url);
-let PDFParseClass = null;
+let pdfParseFn = null;
 
 async function loadPdfParse() {
-  if (!PDFParseClass) {
+  if (!pdfParseFn) {
     try {
       const mod = await import('pdf-parse');
-      PDFParseClass = mod.PDFParse || mod.default?.PDFParse;
+      pdfParseFn = mod.default || mod;
     } catch {
-      const mod = require('pdf-parse');
-      PDFParseClass = mod.PDFParse || mod.default?.PDFParse || mod;
+      pdfParseFn = require('pdf-parse');
     }
-    if (!PDFParseClass || typeof PDFParseClass !== 'function') {
-      throw new Error('pdf-parse PDFParse class is unavailable');
+    if (typeof pdfParseFn !== 'function') {
+      throw new Error('pdf-parse function is unavailable');
     }
   }
-  return PDFParseClass;
+  return pdfParseFn;
 }
 
 async function extractPdfText(fileBuffer) {
-  const PDFParse = await loadPdfParse();
-  const parser = new PDFParse({ data: fileBuffer });
-  try {
-    const parsed = await parser.getText();
-    return (parsed?.text || '').toString();
-  } finally {
-    await parser.destroy().catch(() => {});
-  }
+  const pdfParse = await loadPdfParse();
+  const parsed = await pdfParse(fileBuffer);
+  return (parsed?.text || '').toString();
 }
 
 export const resumeService = {
@@ -89,7 +83,7 @@ export const resumeService = {
       };
     }
 
-    const insights = await buildResumeInsights(user.resumeText, user);
+    const insights = await buildResumeInsights(user.resumeText, user, { quick: true });
     applyResumeInsightsToUser(user, insights);
     await userRepository.save(user);
 

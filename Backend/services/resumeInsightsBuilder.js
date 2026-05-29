@@ -9,8 +9,10 @@ import { analyzeResumeWithGemini } from './geminiResumeAnalysis.js';
 
 /**
  * Build resume insights from extracted PDF text — Gemini when configured, else keyword heuristics.
+ * @param {object} [options] — `{ quick: true }` for faster refresh (shorter prompt / timeout).
  */
-export async function buildResumeInsights(resumeText, user) {
+export async function buildResumeInsights(resumeText, user, options = {}) {
+  const quick = options.quick === true;
   const userContext = {
     name: user?.name,
     role: user?.role,
@@ -20,8 +22,8 @@ export async function buildResumeInsights(resumeText, user) {
   };
 
   const geminiResult = await withTimeout(
-    analyzeResumeWithGemini(resumeText, userContext),
-    config.geminiResumeTimeoutMs,
+    analyzeResumeWithGemini(resumeText, userContext, { quick }),
+    quick ? config.geminiResumeQuickTimeoutMs : config.geminiResumeTimeoutMs,
     null
   );
 

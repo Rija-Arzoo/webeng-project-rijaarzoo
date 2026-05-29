@@ -70,12 +70,13 @@ export function normalizeGeminiResumeAnalysis(raw) {
 /**
  * Analyze resume text with Gemini. Returns null if no API key or on failure.
  */
-export async function analyzeResumeWithGemini(resumeText, userContext = {}) {
+export async function analyzeResumeWithGemini(resumeText, userContext = {}, options = {}) {
   const apiKey = (process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey || !resumeText?.trim()) return null;
 
+  const quick = options.quick === true;
   const model = (process.env.GEMINI_MODEL || DEFAULT_MODEL).trim();
-  const excerpt = resumeText.trim().slice(0, 14_000);
+  const excerpt = resumeText.trim().slice(0, quick ? 6_000 : 10_000);
 
   const context = {
     name: userContext.name || '',
@@ -85,7 +86,19 @@ export async function analyzeResumeWithGemini(resumeText, userContext = {}) {
     degreeLevel: userContext.degreeLevel || '',
   };
 
-  const prompt = `You are an expert career coach reviewing a resume for a university alumni mentorship platform.
+  const prompt = quick
+    ? `Career coach: analyze this resume for a university alumni mentorship platform.
+
+STUDENT: ${JSON.stringify(context)}
+
+RESUME:
+${excerpt}
+
+Return ONLY JSON (no markdown):
+{"resumeSkills":["Skill1"],"resumeSuggestedIndustry":"Technology","resumeSuggestedTopics":["topic"],"resumeInsightSummary":"2 sentences max"}
+
+Rules: 5-8 resumeSkills (title case); industry one of Technology, Finance, Healthcare, Education, Consulting, Manufacturing, Retail, Media & Entertainment, Transportation; 3-4 topics; summary specific to this resume.`
+    : `You are an expert career coach reviewing a resume for a university alumni mentorship platform.
 
 STUDENT_CONTEXT_JSON:
 ${JSON.stringify(context)}
@@ -114,7 +127,11 @@ Rules:
     const response = await ai.models.generateContent({
       model,
       contents: prompt,
-      config: { responseMimeType: 'application/json' },
+      config: {
+        responseMimeType: 'application/json',
+        maxOutputTokens: quick ? 384 : 512,
+        temperature: 0.2,
+      },
     });
 
     const parsed = JSON.parse((response?.text || '').trim());

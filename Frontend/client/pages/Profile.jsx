@@ -201,7 +201,6 @@ export default function Profile() {
       }
       setResumeFile(null);
       setResumeInputKey((k) => k + 1);
-      await fetchUserProfile();
       setSuccess(
         result.analyzedWithAi
           ? 'Resume analyzed with AI — personalized insights are ready.'
@@ -225,7 +224,6 @@ export default function Profile() {
       const result = await api.auth.refreshResumeInsights();
       setUploadResult(result);
       if (result.profile) patchProfile(result.profile);
-      await fetchUserProfile();
       setSuccess(
         result.analyzedWithAi
           ? 'AI insights refreshed from your resume.'
