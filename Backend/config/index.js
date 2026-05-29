@@ -8,7 +8,7 @@ export const config = {
   jwtExpire: process.env.JWT_EXPIRE || '7d',
   geminiRankTimeoutMs: 1500,
   geminiResumeTimeoutMs: Number(process.env.GEMINI_RESUME_TIMEOUT_MS) || 15_000,
-  geminiResumeQuickTimeoutMs: Number(process.env.GEMINI_RESUME_QUICK_TIMEOUT_MS) || 8_000,
+  geminiResumeQuickTimeoutMs: Number(process.env.GEMINI_RESUME_QUICK_TIMEOUT_MS) || 12_000,
   messagePageSize: 80,
   messagePageMax: 150,
   resumeTextMaxLength: 200000,

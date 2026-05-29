@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { getGeminiApiKey, getGeminiModel } from '../lib/geminiConfig.js';
 import { normalizeSkillDisplay } from '../utils/skills.js';
 
 const DEFAULT_MODEL = 'gemini-2.0-flash';
@@ -71,11 +72,11 @@ export function normalizeGeminiResumeAnalysis(raw) {
  * Analyze resume text with Gemini. Returns null if no API key or on failure.
  */
 export async function analyzeResumeWithGemini(resumeText, userContext = {}, options = {}) {
-  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
+  const apiKey = getGeminiApiKey();
   if (!apiKey || !resumeText?.trim()) return null;
 
   const quick = options.quick === true;
-  const model = (process.env.GEMINI_MODEL || DEFAULT_MODEL).trim();
+  const model = getGeminiModel() || DEFAULT_MODEL;
   const excerpt = resumeText.trim().slice(0, quick ? 6_000 : 10_000);
 
   const context = {

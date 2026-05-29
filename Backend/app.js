@@ -3,6 +3,7 @@ import cors from 'cors';
 import './lib/loadEnv.js';
 import { corsOrigin } from './lib/cors.js';
 import { connectDB } from './lib/db.js';
+import { hasGeminiKey } from './lib/geminiConfig.js';
 import authRoutes from './routes/authRoutes.js';
 import mentorRoutes from './routes/mentorRoutes.js';
 import requestRoutes from './routes/requestRoutes.js';
@@ -32,6 +33,7 @@ app.get('/api/health', (req, res) => {
     config: {
       hasMongoUri: Boolean(process.env.MONGODB_URI || process.env.MONGO_URI),
       hasJwtSecret: Boolean(process.env.JWT_SECRET),
+      hasGeminiKey: hasGeminiKey(),
       nodeEnv: process.env.NODE_ENV || 'development',
     },
   });

@@ -4,6 +4,22 @@ import { api } from '../services/apiService.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { compressImageFile } from '../utils/compressImage.js';
 
+function resumeInsightMessage(result, action) {
+  if (result?.analyzedWithAi) {
+    return action === 'refresh'
+      ? 'AI insights refreshed from your resume.'
+      : 'Resume analyzed with AI — personalized insights are ready.';
+  }
+  if (result?.aiStatus === 'no_key') {
+    return action === 'refresh'
+      ? 'Basic insights saved. Add GEMINI_API_KEY to your Backend Vercel project (Settings → Environment Variables), then redeploy.'
+      : 'Resume saved with basic insights. Add GEMINI_API_KEY to your Backend Vercel project (not the Frontend project), then redeploy.';
+  }
+  return action === 'refresh'
+    ? 'Basic insights saved. AI was temporarily unavailable — wait a moment and try Refresh again.'
+    : 'Resume saved with basic insights. AI was temporarily unavailable — try Refresh insights in a moment.';
+}
+
 export default function Profile() {
   const navigate = useNavigate();
   const { user, profile, fetchUserProfile, patchProfile, logout } = useAuth();
@@ -201,11 +217,7 @@ export default function Profile() {
       }
       setResumeFile(null);
       setResumeInputKey((k) => k + 1);
-      setSuccess(
-        result.analyzedWithAi
-          ? 'Resume analyzed with AI — personalized insights are ready.'
-          : 'Resume uploaded — insights updated (add GEMINI_API_KEY for AI analysis).'
-      );
+      setSuccess(resumeInsightMessage(result, 'upload'));
     } catch (err) {
       setError(err.message || 'Resume upload failed');
     } finally {
@@ -224,11 +236,7 @@ export default function Profile() {
       const result = await api.auth.refreshResumeInsights();
       setUploadResult(result);
       if (result.profile) patchProfile(result.profile);
-      setSuccess(
-        result.analyzedWithAi
-          ? 'AI insights refreshed from your resume.'
-          : 'Insights refreshed (check GEMINI_API_KEY in Backend/.env.local for AI).'
-      );
+      setSuccess(resumeInsightMessage(result, 'refresh'));
     } catch (err) {
       setError(err.message || 'Could not refresh insights');
     } finally {

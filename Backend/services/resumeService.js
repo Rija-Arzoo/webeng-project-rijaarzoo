@@ -61,6 +61,7 @@ export const resumeService = {
       body: {
         success: true,
         analyzedWithAi: insights.analyzedWithAi,
+        aiStatus: insights.aiStatus,
         resumeSkills: insights.resumeSkills,
         resumeSuggestedIndustry: insights.resumeSuggestedIndustry,
         resumeSuggestedTopics: insights.resumeSuggestedTopics,
@@ -92,6 +93,7 @@ export const resumeService = {
       body: {
         success: true,
         analyzedWithAi: insights.analyzedWithAi,
+        aiStatus: insights.aiStatus,
         resumeSkills: insights.resumeSkills,
         resumeSuggestedIndustry: insights.resumeSuggestedIndustry,
         resumeSuggestedTopics: insights.resumeSuggestedTopics,

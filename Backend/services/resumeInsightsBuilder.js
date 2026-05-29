@@ -1,4 +1,5 @@
 import { config } from '../config/index.js';
+import { hasGeminiKey } from '../lib/geminiConfig.js';
 import { withTimeout } from '../lib/withTimeout.js';
 import {
   extractIndustryFromText,
@@ -28,7 +29,7 @@ export async function buildResumeInsights(resumeText, user, options = {}) {
   );
 
   if (geminiResult) {
-    return geminiResult;
+    return { ...geminiResult, aiStatus: 'analyzed' };
   }
 
   const resumeSkills = extractSkillsFromText(resumeText);
@@ -44,6 +45,7 @@ export async function buildResumeInsights(resumeText, user, options = {}) {
     resumeSuggestedTopics,
     resumeInsightSummary: '',
     analyzedWithAi: false,
+    aiStatus: hasGeminiKey() ? 'unavailable' : 'no_key',
   };
 }
 

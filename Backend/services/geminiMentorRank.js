@@ -1,16 +1,15 @@
 import { GoogleGenAI } from '@google/genai';
-
-const DEFAULT_MODEL = 'gemini-2.0-flash';
+import { getGeminiApiKey, getGeminiModel } from '../lib/geminiConfig.js';
 
 /**
  * Re-order mentor ids using Gemini (server-side only).
  * Returns null if no API key, empty list, non-student context, or on failure.
  */
 export async function rankMentorIdsForStudent(student, mentorsCompact) {
-  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
+  const apiKey = getGeminiApiKey();
   if (!apiKey || !mentorsCompact?.length) return null;
 
-  const model = (process.env.GEMINI_MODEL || DEFAULT_MODEL).trim();
+  const model = getGeminiModel();
   const studentPayload = {
     skills: student?.skills || [],
     headline: student?.headline || '',
