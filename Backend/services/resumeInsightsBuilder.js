@@ -1,6 +1,4 @@
-import { config } from '../config/index.js';
 import { hasGeminiKey } from '../lib/geminiConfig.js';
-import { withTimeout } from '../lib/withTimeout.js';
 import {
   extractIndustryFromText,
   extractSkillsFromText,
@@ -20,11 +18,7 @@ export async function buildResumeInsights(resumeText, user) {
     degreeLevel: user?.degreeLevel,
   };
 
-  const geminiResult = await withTimeout(
-    analyzeResumeWithGemini(resumeText, userContext),
-    config.geminiResumeTimeoutMs,
-    null
-  );
+  const geminiResult = await analyzeResumeWithGemini(resumeText, userContext);
 
   if (geminiResult) {
     return { ...geminiResult, aiStatus: 'analyzed' };
