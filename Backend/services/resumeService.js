@@ -84,7 +84,7 @@ export const resumeService = {
       };
     }
 
-    const insights = await buildResumeInsights(user.resumeText, user, { quick: true });
+    const insights = await buildResumeInsights(user.resumeText, user);
     applyResumeInsightsToUser(user, insights);
     await userRepository.save(user);
 

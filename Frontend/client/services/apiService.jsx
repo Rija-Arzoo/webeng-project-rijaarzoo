@@ -6,7 +6,7 @@ import { API_BASE_URL } from './apiConfig.js';
 import { getCached, setCached, invalidateCache, cachedGetSWR } from './apiCache.js';
 import { dedupeRequest } from './requestDedupe.js';
 
-const REQUEST_TIMEOUT_MS = 25_000;
+const REQUEST_TIMEOUT_MS = 35_000;
 
 const getAuthToken = () => {
   try {

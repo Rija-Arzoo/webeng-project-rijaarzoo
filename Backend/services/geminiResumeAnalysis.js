@@ -1,8 +1,7 @@
-import { GoogleGenAI } from '@google/genai';
-import { getGeminiApiKey, getGeminiModel } from '../lib/geminiConfig.js';
+import { generateGeminiText } from '../lib/geminiClient.js';
+import { getGeminiApiKey } from '../lib/geminiConfig.js';
+import { parseModelJson } from '../lib/parseModelJson.js';
 import { normalizeSkillDisplay } from '../utils/skills.js';
-
-const DEFAULT_MODEL = 'gemini-2.0-flash';
 
 const ALLOWED_INDUSTRIES = new Set([
   'Technology',
@@ -68,17 +67,8 @@ export function normalizeGeminiResumeAnalysis(raw) {
   };
 }
 
-/**
- * Analyze resume text with Gemini. Returns null if no API key or on failure.
- */
-export async function analyzeResumeWithGemini(resumeText, userContext = {}, options = {}) {
-  const apiKey = getGeminiApiKey();
-  if (!apiKey || !resumeText?.trim()) return null;
-
-  const quick = options.quick === true;
-  const model = getGeminiModel() || DEFAULT_MODEL;
-  const excerpt = resumeText.trim().slice(0, quick ? 6_000 : 10_000);
-
+function buildResumePrompt(resumeText, userContext) {
+  const excerpt = resumeText.trim().slice(0, 10_000);
   const context = {
     name: userContext.name || '',
     role: userContext.role || 'student',
@@ -87,19 +77,7 @@ export async function analyzeResumeWithGemini(resumeText, userContext = {}, opti
     degreeLevel: userContext.degreeLevel || '',
   };
 
-  const prompt = quick
-    ? `Career coach: analyze this resume for a university alumni mentorship platform.
-
-STUDENT: ${JSON.stringify(context)}
-
-RESUME:
-${excerpt}
-
-Return ONLY JSON (no markdown):
-{"resumeSkills":["Skill1"],"resumeSuggestedIndustry":"Technology","resumeSuggestedTopics":["topic"],"resumeInsightSummary":"2 sentences max"}
-
-Rules: 5-8 resumeSkills (title case); industry one of Technology, Finance, Healthcare, Education, Consulting, Manufacturing, Retail, Media & Entertainment, Transportation; 3-4 topics; summary specific to this resume.`
-    : `You are an expert career coach reviewing a resume for a university alumni mentorship platform.
+  return `You are an expert career coach reviewing a resume for a university alumni mentorship platform.
 
 STUDENT_CONTEXT_JSON:
 ${JSON.stringify(context)}
@@ -122,20 +100,23 @@ Rules:
 - resumeSuggestedIndustry: exactly one of: Technology, Finance, Healthcare, Education, Consulting, Manufacturing, Retail, Media & Entertainment, Transportation.
 - resumeSuggestedTopics: 3-5 actionable mentorship goals tailored to this person (not generic platitudes).
 - resumeInsightSummary: concise, professional, specific to this resume.`;
+}
+
+/**
+ * Analyze resume text with Gemini. Returns null if no API key or on failure.
+ */
+export async function analyzeResumeWithGemini(resumeText, userContext = {}) {
+  if (!getGeminiApiKey() || !resumeText?.trim()) return null;
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        maxOutputTokens: quick ? 384 : 512,
-        temperature: 0.2,
-      },
+    const prompt = buildResumePrompt(resumeText, userContext);
+    const { text } = await generateGeminiText(prompt, {
+      responseMimeType: 'application/json',
+      maxOutputTokens: 768,
+      temperature: 0.2,
     });
 
-    const parsed = JSON.parse((response?.text || '').trim());
+    const parsed = parseModelJson(text);
     return normalizeGeminiResumeAnalysis(parsed);
   } catch (err) {
     console.warn('Gemini resume analysis failed:', err?.message || err);

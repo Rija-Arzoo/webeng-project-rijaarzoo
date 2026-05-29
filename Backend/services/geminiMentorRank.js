@@ -1,5 +1,6 @@
-import { GoogleGenAI } from '@google/genai';
-import { getGeminiApiKey, getGeminiModel } from '../lib/geminiConfig.js';
+import { generateGeminiText } from '../lib/geminiClient.js';
+import { getGeminiApiKey } from '../lib/geminiConfig.js';
+import { parseModelJson } from '../lib/parseModelJson.js';
 
 /**
  * Re-order mentor ids using Gemini (server-side only).
@@ -9,7 +10,6 @@ export async function rankMentorIdsForStudent(student, mentorsCompact) {
   const apiKey = getGeminiApiKey();
   if (!apiKey || !mentorsCompact?.length) return null;
 
-  const model = getGeminiModel();
   const studentPayload = {
     skills: student?.skills || [],
     headline: student?.headline || '',
@@ -31,15 +31,13 @@ ${JSON.stringify(mentorsCompact)}
 Task: output a JSON array containing every mentor "id" exactly once, ordered from best career/skills fit for this student to weakest. Use only ids from MENTORS_JSON. No markdown, no extra keys — only the JSON array.`;
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: { responseMimeType: 'application/json' },
+    const { text } = await generateGeminiText(prompt, {
+      responseMimeType: 'application/json',
+      maxOutputTokens: 512,
+      requestTimeoutMs: 12_000,
     });
 
-    const raw = (response?.text || '').trim();
-    const parsed = JSON.parse(raw);
+    const parsed = parseModelJson(text);
     if (!Array.isArray(parsed)) return null;
     const ids = parsed.map((x) => String(x)).filter(Boolean);
     return ids;
